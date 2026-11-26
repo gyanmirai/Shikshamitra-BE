@@ -22,13 +22,20 @@ public sealed class ApiRequestTimingMiddleware(RequestDelegate next,
 			return;
 		}
 
-		using var timing = ApiRequestTimingScope.Start();
+		var path = context.Request.Path;
+		var trackPayrollRead = HttpMethods.IsGet(context.Request.Method) &&
+			(path == "/api/payroll/run/register" || path == "/api/payroll/run/previews/current");
+		using var timing = ApiRequestTimingScope.Start(trackPayrollRead);
+		string? payrollPhases = null;
 		context.Response.OnStarting(() =>
 		{
 			// Timing at response start can be compared directly with the browser's TTFB.
 			context.Response.Headers.Append("Server-Timing", string.Format(CultureInfo.InvariantCulture,
 				"app;dur={0:F2}, db;dur={1:F2}, db-open;dur={2:F2}",
 				timing.ElapsedMilliseconds, timing.CommandMilliseconds, timing.ConnectionMilliseconds));
+			payrollPhases = timing.FormatPayrollPhases();
+			if (payrollPhases != null)
+				context.Response.Headers.Append("Server-Timing", payrollPhases);
 			return Task.CompletedTask;
 		});
 		try
@@ -41,10 +48,10 @@ public sealed class ApiRequestTimingMiddleware(RequestDelegate next,
 			{
 				// Route templates exclude query strings and applicant/document identifiers.
 				var route = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText ?? "/api (unmatched)";
-				logger.LogWarning("SlowApiRequest TraceId={TraceId} Method={Method} Route={Route} StatusCode={StatusCode} ElapsedMs={ElapsedMs} DbCommandCount={DbCommandCount} DbCommandMs={DbCommandMs} MaxDbCommandMs={MaxDbCommandMs} DbConnectionOpenMs={DbConnectionOpenMs}",
+				logger.LogWarning("SlowApiRequest TraceId={TraceId} Method={Method} Route={Route} StatusCode={StatusCode} ElapsedMs={ElapsedMs} DbCommandCount={DbCommandCount} DbCommandMs={DbCommandMs} MaxDbCommandMs={MaxDbCommandMs} DbConnectionOpenMs={DbConnectionOpenMs} PayrollPhases={PayrollPhases}",
 					context.TraceIdentifier, context.Request.Method, route, context.Response.StatusCode,
 					timing.ElapsedMilliseconds, timing.CommandCount, timing.CommandMilliseconds,
-					timing.MaxCommandMilliseconds, timing.ConnectionMilliseconds);
+					timing.MaxCommandMilliseconds, timing.ConnectionMilliseconds, payrollPhases);
 			}
 		}
 	}

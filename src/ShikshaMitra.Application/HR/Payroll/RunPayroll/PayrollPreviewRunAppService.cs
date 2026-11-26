@@ -86,15 +86,21 @@ public class PayrollPreviewRunAppService(
 
 	public virtual async Task<PayrollPreviewLookupDto> GetCurrentAsync(PayrollPreviewMonthInput input)
 	{
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ServiceStarted);
 		var (year, month, _) = PayrollRunRules.ParseMonth(input.Month);
 		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.AcademicYearResolved);
 		var scopedIds = await scopeResolver.ReadScopedEligibleIdsAsync(year, month);
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.StaffScopeResolved);
 		var scopedRuns = await GetScopedRunsAsync($"{year:0000}-{month:00}", academicYear, ScopeFingerprint(scopedIds));
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns);
-		return new PayrollPreviewLookupDto
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PreviewResolved);
+		var result = new PayrollPreviewLookupDto
 		{
 			CurrentRun = latest == null ? null : await ReadStatusAsync(latest)
 		};
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.StatusRead);
+		return result;
 	}
 
 	public virtual async Task<PayrollPreviewStatusDto> GetAsync(Guid id) =>
@@ -102,6 +108,7 @@ public class PayrollPreviewRunAppService(
 
 	public virtual async Task<RunPayrollResponse> GetRegisterAsync(PayrollRegisterInput input)
 	{
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ServiceStarted);
 		ValidatePage(input);
 		if (input.Sort is not (null or "employeeName" or "payableDays" or "netPay" or "netPayDelta") ||
 			input.ReviewState is not (null or "PENDING" or "REVIEWED" or "SUBMITTED" or "LOCKED") ||
@@ -110,11 +117,14 @@ public class PayrollPreviewRunAppService(
 		var (year, month, internalMonth) = PayrollRunRules.ParseMonth(input.Month);
 		var canonicalMonth = $"{year:0000}-{month:00}";
 		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.AcademicYearResolved);
 		var scopedStaff = await scopeResolver.GetScopedEmployeeQueryAsync(false);
 		var scopedIds = scopedStaff.Select(x => x.Id);
 		var eligibleIds = await PayrollScopedEmployeeResolver.ReadEligibleIdsAsync(scopedStaff, year, month, AsyncExecuter);
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.StaffScopeResolved);
 		var scopedRuns = await GetScopedRunsAsync(canonicalMonth, academicYear, ScopeFingerprint(eligibleIds));
 		var workingRun = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns.Where(x => x.Status == "SUCCEEDED"));
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PreviewResolved);
 		var issuedSlips = await coverage.GetIssuedAsync(canonicalMonth, scopedStaff);
 		var issuedIdsQuery = issuedSlips.Select(x => x.EmployeeId);
 		var monthSnapshots = (await snapshots.GetQueryableAsync()).Where(x => x.MonthYear == internalMonth);
@@ -196,7 +206,7 @@ public class PayrollPreviewRunAppService(
 			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize);
 		if (input.RowsOnly)
 		{
-			return new RunPayrollResponse
+			var result = new RunPayrollResponse
 			{
 				PreviewRunId = workingRun?.Id,
 				CurrentPage = input.Page,
@@ -211,10 +221,14 @@ public class PayrollPreviewRunAppService(
 					IsLocked = x.Source != 0
 				}))
 			};
+			PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PageRead);
+			return result;
 		}
 
 		var count = await AsyncExecuter.CountAsync(displayRows);
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.CountRead);
 		var pageRows = await AsyncExecuter.ToListAsync(page.Select(x => new { x.EmployeeId, x.Source }));
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PageRead);
 		var issuedIds = (await AsyncExecuter.ToListAsync(issuedIdsQuery)).ToHashSet();
 		var workingIds = pageRows.Where(x => x.Source == 0).Select(x => x.EmployeeId).ToArray();
 		var finalizedIds = pageRows.Where(x => x.Source == 1).Select(x => x.EmployeeId).ToArray();
@@ -276,6 +290,7 @@ public class PayrollPreviewRunAppService(
 			}
 			items.Add(row.EmployeeId, item);
 		}
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.DetailsRead);
 
 		var isCurrent = workingRun is { HasCurrentCalculationVersion: true }
 			&& workingRun.InputRevision == await revisions.ReadAsync();
@@ -287,6 +302,7 @@ public class PayrollPreviewRunAppService(
 		summary.ReviewedCount = workingRun == null ? 0 :
 			await AsyncExecuter.CountAsync(reviewQuery.Where(x => allWorking.Any(row => row.EmployeeId == x.EmployeeId)));
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.StatusRead);
 		return new RunPayrollResponse
 		{
 			PreviewRunId = workingRun?.Id,

@@ -19,11 +19,18 @@ include all reader consumption, EF model building, query compilation or non-EF
 database calls. Concurrent durations can overlap; do not subtract their sum from
 request duration to calculate an exact non-database duration.
 
+Run Payroll register and current-preview reads also report `payroll-*` intervals between completed steps.
+These cover routing, authentication and claim resolution, authorization and action binding, service entry, academic year, staff scope, and saved preview selection.
+Full register reads identify count, page selection, details, and status separately.
+Opening rows omit the full-register phases they skip.
+Action exit and response-header timings show the remaining time after the last recorded read.
+
 ## Slow-request log
 
 Requests taking at least 2,000 ms produce one `SlowApiRequest` warning with:
 `TraceId`, method, parameterized route, status, elapsed time, command count,
 total command time, maximum command time and connection-open time.
+When available, the warning includes the same Run Payroll phase timings as the response.
 
 `PerformanceDiagnostics__SlowRequestMilliseconds` overrides the threshold.
 Zero logs every API request for a short diagnostic run; the default avoids that

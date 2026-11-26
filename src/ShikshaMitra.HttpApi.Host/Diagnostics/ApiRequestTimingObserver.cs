@@ -5,11 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Hosting;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 
 namespace ShikshaMitra.Diagnostics;
 
-/// <summary>Uses EF's existing events without enabling SQL or sensitive-data logging.</summary>
-public sealed class ApiDatabaseTimingObserver : IHostedService, IObserver<DiagnosticListener>,
+/// <summary>Collects EF events and payroll checkpoints without retaining sensitive data.</summary>
+public sealed class ApiRequestTimingObserver : IHostedService, IObserver<DiagnosticListener>,
 	IObserver<KeyValuePair<string, object?>>
 {
 	private readonly List<IDisposable> _subscriptions = [];
@@ -40,11 +41,11 @@ public sealed class ApiDatabaseTimingObserver : IHostedService, IObserver<Diagno
 
 	public void OnNext(DiagnosticListener listener)
 	{
-		if (listener.Name != "Microsoft.EntityFrameworkCore") return;
+		if (listener.Name is not ("Microsoft.EntityFrameworkCore" or PayrollReadDiagnostics.SourceName)) return;
 		lock (_gate)
 		{
 			if (!_stopped)
-				_subscriptions.Add(listener.Subscribe(this, name => name is Executed or Failed or Opened));
+				_subscriptions.Add(listener.Subscribe(this, name => name is Executed or Failed or Opened or PayrollReadDiagnostics.CheckpointEvent));
 		}
 	}
 
@@ -56,6 +57,8 @@ public sealed class ApiDatabaseTimingObserver : IHostedService, IObserver<Diagno
 			scope.RecordCommand(command.Duration);
 		else if (value.Key == Opened && value.Value is ConnectionEndEventData connection)
 			scope.RecordConnection(connection.Duration);
+		else if (value.Key == PayrollReadDiagnostics.CheckpointEvent && value.Value is PayrollReadCheckpoint checkpoint)
+			scope.RecordPayrollCheckpoint(checkpoint);
 	}
 
 	public void OnCompleted() { }

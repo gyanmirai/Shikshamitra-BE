@@ -117,7 +117,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		services.AddHttpClient(WhatsAppProviderClient.HttpClientName)
 			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
 			.RemoveAllLoggers();
-		services.AddHostedService<ShikshaMitra.Diagnostics.ApiDatabaseTimingObserver>();
+		services.AddHostedService<ShikshaMitra.Diagnostics.ApiRequestTimingObserver>();
 		services.AddRateLimiter(options =>
 		{
 			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -542,6 +542,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseRouting();
 		app.UseRateLimiter();
 		app.UseCors();
+		app.Use(next => httpContext =>
+		{
+			Diagnostics.ApiRequestTimingScope.Current?.RecordPayrollCheckpoint(
+				HR.Payroll.RunPayroll.PayrollReadCheckpoint.RoutingCompleted);
+			return next(httpContext);
+		});
 
 		if (env.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
 		{
@@ -559,6 +565,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseUnitOfWork();
 		app.UseDynamicClaims();
 		app.UseMiddleware<ShikshaMitra.Middleware.StudentPortalSessionMiddleware>();
+		app.Use(next => httpContext =>
+		{
+			Diagnostics.ApiRequestTimingScope.Current?.RecordPayrollCheckpoint(
+				HR.Payroll.RunPayroll.PayrollReadCheckpoint.AuthenticationCompleted);
+			return next(httpContext);
+		});
 		app.UseAuthorization();
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>

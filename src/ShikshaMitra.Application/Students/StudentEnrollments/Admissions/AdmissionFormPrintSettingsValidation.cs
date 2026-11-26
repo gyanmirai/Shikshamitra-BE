@@ -37,9 +37,9 @@ internal static class AdmissionFormPrintSettingsValidation
 		}
 		if (settings.Style is { } style)
 		{
-			Choice(style.Palette, "colour palette", "school-blue", "neutral", "monochrome");
+			Choice(style.Palette, "colour palette", "school-blue", "neutral", "forest-green", "monochrome");
 			Colour(style.SectionFill); Colour(style.BorderColor); Colour(style.TextColor);
-			Choice(style.FontFamily, "font family", "sans", "serif");
+			Choice(style.FontFamily, "font family", "sans", "serif", "monospace", "roboto");
 			Range(style.BaseSize, 8, 14, "body font size");
 			Range(style.TitleSize, 12, 24, "title font size");
 			Choice(style.LabelWeight, "label weight", "regular", "semibold");
@@ -59,6 +59,7 @@ internal static class AdmissionFormPrintSettingsValidation
 		{
 			Choice(header.Continuation, "continuation header", "compact", "full", "none");
 			Choice(header.Alignment, "header alignment", "left", "center", "right");
+			Choice(header.AddressLayout, "address layout", "vertical", "horizontal");
 			Text(header.Title, 128, "form title"); Text(header.Subtitle, 128, "form subtitle");
 			if (header.Layout is { } layout)
 			{
@@ -191,5 +192,5 @@ internal static class AdmissionFormPrintSettingsValidation
 		if (value != null && !Regex.IsMatch(value, "^#[0-9A-Fa-f]{6}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
 			Invalid("Choose a six-digit hexadecimal print colour.");
 	}
-	private static void Invalid(string message) => throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition, message);
+	private static void Invalid(string message) => throw new UserFriendlyException(message, code: AdmissionFormErrorCodes.InvalidDefinition);
 }

@@ -8,6 +8,8 @@ namespace ShikshaMitra.Common.IdentityCards;
 
 internal static class IdentityCardSchema
 {
+	public const float MinimumFontSize = 4;
+
 	public static readonly JsonSerializerOptions JsonOptions = new()
 	{
 		PropertyNameCaseInsensitive = true,
@@ -50,6 +52,8 @@ internal static class IdentityCardSchema
 					if (element.Prefix != null && (element.Type != "text" || element.Prefix.Length > 150))
 						throw IdentityCardGeometry.Invalid("Only text elements can use a prefix of up to 150 characters.");
 					var style = element.Style;
+					if (style.BorderStyle != null && (style.BorderStyle is not ("solid" or "dashed" or "dotted") || element.Type is not ("line" or "shape")))
+						throw IdentityCardGeometry.Invalid("Border style must be solid, dashed or dotted and only applies to lines and shapes.");
 					if (!ValidNumber(element.Rotation, -180, 180) || !ValidNumber(element.Opacity, 0, 1) || element.GroupId?.Length > 100 ||
 						(element.ImageData != null && element.Type != "image")) throw IdentityCardGeometry.Invalid("Invalid rotation, opacity, group or image binding.");
 					if (element.Type == "image") _ = IdentityCardRaster.Decode(element.ImageData);
@@ -57,7 +61,7 @@ internal static class IdentityCardSchema
 					if (style.Color != null) style.Color = IdentityCardSvgFormatting.NormalizeColor(style.Color);
 					if (style.BackgroundColor != null) style.BackgroundColor = IdentityCardSvgFormatting.NormalizeColor(style.BackgroundColor);
 					if (style.BorderColor != null) style.BorderColor = IdentityCardSvgFormatting.NormalizeColor(style.BorderColor);
-					if (!ValidNumber(style.BorderWidth, 0, 20) || !ValidNumber(style.BorderRadius, 0, 1000) || !ValidNumber(style.FontSize, 4, 100) ||
+					if (!ValidNumber(style.BorderWidth, 0, 20) || !ValidNumber(style.BorderRadius, 0, 1000) || !ValidNumber(style.FontSize, MinimumFontSize, 100) ||
 						(style.FontFamily != null && !Fonts.Contains(style.FontFamily)) || (style.TextAlign != null && style.TextAlign is not ("left" or "center" or "right")) ||
 						(style.Shape != null && style.Shape is not ("rectangle" or "ellipse")) ||
 						(style.FontStyle != null && style.FontStyle is not ("normal" or "italic")) ||

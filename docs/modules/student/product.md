@@ -33,9 +33,9 @@ See the [API contract](./api.md#registration-print-contract), [validation](./tes
 
 Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has one optional House leader across all its divisions. Each division has one optional Division leader. A candidate must be an active enrolled member of the house or division they will lead. A student can hold both roles.
 
-View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Shared house configuration requires medium-wide or broader scope. Appointments require division scope and a candidate visible in that division. Both slots share one division concurrency stamp. Tenant, active identity, academic scope and concurrency checks remain server enforced.
+View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Shared house configuration and House Leader appointments require medium-wide or broader scope. Division Leader appointments require division scope. Each appointment uses the current concurrency stamp of its house or division. Tenant, active identity, academic scope and concurrency checks remain server enforced.
 
-Each membership change batch is scoped to one division. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A same-medium division change retains house membership and House leadership and clears the former Division leadership. A medium change or deactivation clears appointments for the roles the student leaves. Stale previews require fresh review. See the [migration notes](./api.md#house-management).
+Each membership change batch is scoped to one division. Staff can target selected enrollments or assign a destination house across the entire division. Entire-division assignment targets unassigned students by default. Including students assigned to other houses requires an explicit choice. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A same-medium division change retains house membership and House leadership and clears the former Division leadership. A medium change or deactivation clears appointments for the roles the student leaves. Stale previews require fresh review. See the [API contract](./api.md#house-management).
 
 ## Resume an ended admission
 
@@ -181,6 +181,12 @@ Legacy migration retains original observations and ambiguous conflicts, bridges 
 It never invents historical presence, activation dates, calendar definitions, policy snapshots or provisioning completion.
 Parent alerts, offline marking and biometric/RFID integrations are outside this rollout.
 Local tests and source availability do not certify deployment or authenticated browser verification.
+
+## Student birthdays
+
+Birthday uses current placement from the selected academic year's Active Student List, including eligible legacy students. The occurrence uses the school calendar date of the saved birth value, including records entered at school midnight and stored as UTC timestamps. The roster orders occurrences by date and student name and honors the published Records Identity policy.
+
+The server resolves Today and other date presets in Asia/Kolkata. Next 7 days starts tomorrow and This month includes dates earlier in the month. February 29 occurs on February 28 in common years. Historical date selections still show current placement in the selected academic year.
 
 ## Permanent Student Records behavior
 

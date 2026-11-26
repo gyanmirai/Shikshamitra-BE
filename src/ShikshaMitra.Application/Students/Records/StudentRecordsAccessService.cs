@@ -44,13 +44,18 @@ public class StudentRecordsAccessService(
 	}
 
 	// The caller first constrains this population to one current year and establishes current actor, tenant and scope.
-	internal async Task<IQueryable<Student>> FilterFullAccessStudentsAsync(IQueryable<Student> query, StudentRecordsPolicy policy)
+	internal Task<IQueryable<Student>> FilterFullAccessStudentsAsync(IQueryable<Student> query, StudentRecordsPolicy policy) =>
+		FilterProfileEligibleStudentsAsync(query, policy.Provisioning.Mode == "Full");
+
+	internal Task<IQueryable<Student>> FilterReadableProfileStudentsAsync(IQueryable<Student> query, StudentRecordsPolicy policy) =>
+		FilterProfileEligibleStudentsAsync(query, policy.Provisioning.Mode != "OnboardingOnly");
+
+	private async Task<IQueryable<Student>> FilterProfileEligibleStudentsAsync(IQueryable<Student> query, bool allowProvisioning)
 	{
 		var eligibleIds = await GetOnboardingEligibleStudentIdsAsync();
 		var overrideQuery = await overrides.GetQueryableAsync();
 		var caseQuery = await cases.GetQueryableAsync();
 		var enrollmentQuery = await enrollments.GetQueryableAsync();
-		var allowProvisioning = policy.Provisioning.Mode == "Full";
 		return query.Where(student => eligibleIds.Contains(student.Id) ||
 			overrideQuery.Any(item => item.TenantId == CurrentTenant.Id && item.StudentId == student.Id && item.Status == "Approved") ||
 			allowProvisioning && caseQuery.Any(item => item.TenantId == CurrentTenant.Id && item.StudentId == student.Id &&

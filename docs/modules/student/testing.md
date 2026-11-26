@@ -65,10 +65,10 @@ Report isolated test compilation and any migration-metadata exclusions separatel
 
 ## Class I-Card assignments
 
-Run the focused HTTP contract tests for unassigned and empty classes, division-only scope, stamp conflicts, preview, PDF export, same-key issue retry, replacement and template deletion protection.
+Run the focused HTTP contract tests for unassigned and empty classes, division-only scope, stamp conflicts, preview, PDF export, same-key issue retry, replacement and template deletion protection. The roster case verifies active enrollment roll numbers, photo presence, case-insensitive text, exact roll search, filter validation and scope-aware counts before paging.
 
 ```powershell
-dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Icard_class_assignment"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Icard_class_assignment|FullyQualifiedName~Icard_class_roster"
 ```
 
 Set `STUDENT_RECORDS_APPLICATION_POSTGRES` to a fresh loopback `records_tests_*` database to include real concurrent issue requests. The provider test uses two serializable transactions and expects a single valid issued card and a conflict for the competing batch.
@@ -95,6 +95,10 @@ The production first-use lock requires an existing PostgreSQL transaction and re
 ## Form version history integrity
 
 `AdmissionFormVersionComparison_Tests` checks rule, binding, editability, order, help/default, translation, section-layout and inherited-source changes, plus equivalent JSON and generated-ID handling. It also checks readable field/section names for additions, removals and changes, both names for renames, friendly legacy fallbacks, repeated labels and unchanged source DTOs. `Form_version_conflicts_identify_the_existing_draft_without_rewriting_history` and `Form_version_cannot_leave_its_original_family_when_an_api_changes_its_code` cover actionable conflicts, stable family identity, unchanged historical content and a no-change comparison through the service. The archive lifecycle scenario captures all current required parent fields for replacement intake, asserts the used offering stays locked, and uses a separate unused offering for the replacement; all ten original answer snapshots and the original public-link reference must remain unchanged. These are isolated test scenarios, not a migration of existing school data.
+
+## Form address selector validation
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Form_address_"` to check Inquiry and Registration draft saves, missing or cross-address dependencies, step order, and effective Registration inheritance order.
 
 ## Confirmed sibling registration and public capture
 
@@ -183,6 +187,10 @@ Staff-profile assertions use the baseline role catalogue and explicit internal t
 All existing seeder execution bodies remain unchanged, and four compiled before/after catalogue comparisons have zero differences.
 The fresh post-repair 15-project Debug solution build passes with zero warnings/errors. Final selections pass the full 1650-case Domain suite, 37 Application cases, 196 HTTP cases, six migration-model/provider cases and one real PostgreSQL permission/upgrade case, all without skips.
 The first PostgreSQL attempt overlapped the other suites and timed out in FeeCollection demo-startup standard loading before permission assertions; an unchanged isolated rerun passed. Both marked disposable databases were removed. Parallel-load startup reliability remains unverified; these results do not certify every solution test, a fresh Release build or deployed acceptance.
+
+## Birthday roster checks
+
+Run the HTTP tests filtered to `StudentBirthdaysApi_Tests` and `StudentBirthdaysPostgres_Tests`. The PostgreSQL cases require `STUDENT_RECORDS_APPLICATION_POSTGRES` pointing to a fresh disposable loopback `records_tests_*` database. Run the Student module visibility and Records permission menu contract tests and the exact Student action grant/deny HTTP tests for both Birthday View grants.
 
 ## House Management security checks
 
@@ -287,7 +295,7 @@ restarted local Host, not deployed staging.
 
 ## Payment joining date
 
-`AdmissionPaymentJoiningDate_Tests.cs` extends the owning runtime integration fixture with candidate-preview purity (no account or persisted date), missing-form proration, preview/preparation parity, application-stamp conflicts, prepared-date locking, submitted Registration answer synchronization, the shared Registration edit guard, and invalid date rejection. `AdmissionProrationIntegration_Tests.cs` also verifies full charge/no policy before the Institute Setup academic-year Start Date, policy application on the cutoff and after it, rejection of pre-cutoff overrides, and no policy version pinned to newly prepared dues. `AdmissionJoiningDate_Tests` covers application-local date storage and locked corrections. Retain the existing `Proration_` integration cases for policy-version, regular/one-time fee, legacy binding, and Onboarding handoff behavior. The implementation uses existing Finance calculations and endpoints without migrations.
+`AdmissionPaymentJoiningDate_Tests.cs` extends the owning runtime integration fixture with candidate-preview purity (no account or persisted date), missing-form proration, preview/preparation parity, application-stamp conflicts, prepared-date locking, submitted Registration answer synchronization, the shared Registration edit guard, and invalid date rejection. `AdmissionProrationIntegration_Tests.cs` also verifies full charge and no policy on or before the Institute Setup academic-year Start Date, policy application after it, rejection of overrides on or before the cutoff, and no policy version pinned to newly prepared dues. `AdmissionJoiningDate_Tests` covers application-local date storage and locked corrections. Retain the existing `Proration_` integration cases for policy-version, regular/one-time fee, legacy binding, and Onboarding handoff behavior. The implementation uses existing Finance calculations and endpoints without migrations.
 
 The local owning gate passes 25 application cases (new date scenarios plus existing proration regressions), a separate five-case exact-permission/tenant/deferred-Onboarding gate, two persistence/submitted-snapshot rechecks, and two Domain cases, with zero skips. The persistence regression caught ABP rehydrating an ISO ExtraProperties string as `DateTime`; the application accessor and captured joining-date prefill now normalize that representation without changing the calendar day. These checks do not establish live payment acceptance. The attempted Development Host uses localhost PostgreSQL but startup is blocked by missing `AbpSettingDefinitions`; no migration, reseed, credential/configuration change, or payment collection was performed to bypass that blocker.
 

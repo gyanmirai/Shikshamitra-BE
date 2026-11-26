@@ -11,9 +11,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Theory]
-	[InlineData("boxed-grid")]
-	[InlineData("structured-classic")]
-	public Task Registration_print_settings_survive_create_get_update_clone_and_new_version(string template) => RunCertificationScenarioAsync(async () =>
+	[InlineData("boxed-grid", "roboto")]
+	[InlineData("structured-classic", "monospace")]
+	public Task Registration_print_settings_survive_create_get_update_clone_and_new_version(string template, string fontFamily) => RunCertificationScenarioAsync(async () =>
 	{
 		var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 		const string advanced = """
@@ -24,11 +24,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			""", options)!;
 		input.PrintSettings!.Template = template;
 		input.PrintSettings.Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>(advanced, options);
+		input.PrintSettings.Advanced!.Style = new() { Palette = "forest-green", FontFamily = fontFamily, BaseSize = 10, TitleSize = 16, LabelWeight = "semibold" };
 		var created = await _formAppService.CreateAsync(input);
+	created.Status.ShouldBe(AdmissionFormStatus.Draft);
 		var loaded = await _formAppService.GetAsync(created.Id);
 		var expected = JsonNode.Parse("""{"layout":"spacious","paperSize":"A4","showSchoolHeader":false,"showPhoto":true,"showSignature":false}""");
 		expected!["template"] = template;
-		expected["advanced"] = JsonNode.Parse(advanced);
+		expected["advanced"] = JsonSerializer.SerializeToNode(input.PrintSettings.Advanced, options);
 		var loadedSettings = JsonSerializer.SerializeToNode(loaded, options)!["printSettings"];
 		loadedSettings.ShouldNotBeNull();
 		JsonNode.DeepEquals(loadedSettings, expected).ShouldBeTrue();
@@ -42,6 +44,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		oldClientUpdate["printSettings"]!.AsObject().Remove("advanced");
 		updated = await _formAppService.UpdateAsync(created.Id, oldClientUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!);
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(updated, options)!["printSettings"], expected).ShouldBeTrue();
+	var typographyUpdate = JsonSerializer.SerializeToNode(updated, options)!.AsObject();
+	var updatedFont = fontFamily == "roboto" ? "monospace" : "roboto";
+	typographyUpdate["printSettings"]!["advanced"]!["style"]!["fontFamily"] = updatedFont;
+	updated = await _formAppService.UpdateAsync(created.Id, typographyUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!);
+	expected["advanced"]!["style"]!["fontFamily"] = updatedFont;
+	var reopened = await _formAppService.GetAsync(created.Id);
+	JsonNode.DeepEquals(JsonSerializer.SerializeToNode(reopened, options)!["printSettings"], expected).ShouldBeTrue();
 		var invalidUpdate = JsonSerializer.SerializeToNode(updated, options)!.AsObject();
 		invalidUpdate["name"] = "Must not mutate the saved form";
 		invalidUpdate["printSettings"]!["template"] = "unsupported";
@@ -50,8 +59,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await _formAppService.GetAsync(created.Id)).Name.ShouldBe(updated.Name);
 		invalidUpdate["printSettings"]!["template"] = template;
 		invalidUpdate["printSettings"]!["advanced"]!["style"] = new JsonObject { ["borderColor"] = "invalid-colour" };
-		(await Should.ThrowAsync<BusinessException>(() => _formAppService.UpdateAsync(created.Id,
-			invalidUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!))).Code.ShouldBe(AdmissionFormErrorCodes.InvalidDefinition);
+		var invalidStyle = await Should.ThrowAsync<UserFriendlyException>(() => _formAppService.UpdateAsync(created.Id,
+			invalidUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!));
+		invalidStyle.Code.ShouldBe(AdmissionFormErrorCodes.InvalidDefinition);
+		invalidStyle.Message.ShouldBe("Choose a six-digit hexadecimal print colour.");
 		(await _formAppService.GetAsync(created.Id)).Name.ShouldBe(updated.Name);
 		var clone = await _formAppService.CloneAsync(created.Id, new() { Name = "Printable clone" });
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(clone, options)!["printSettings"], expected).ShouldBeTrue();

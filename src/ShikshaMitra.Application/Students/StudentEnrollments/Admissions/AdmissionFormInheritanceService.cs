@@ -95,7 +95,8 @@ public class AdmissionFormInheritanceService(
 			await IsRetainedArchivedSourceAsync(persistedRegistration, inquiry.Id);
 		if (inquiry.Status != AdmissionFormStatus.Published && !retainedArchivedSource)
 			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource, "Choose a published Inquiry version or a retained version captured on a connected admission route.");
-		return Compose(registration, inquiry, requireApprovedSource: false);
+		return ComposeCore(registration, inquiry, requireApprovedSource: false, publicSourceProjection: false,
+			validateAddresses: registration.Status == AdmissionFormStatus.Draft);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]
@@ -168,7 +169,7 @@ public class AdmissionFormInheritanceService(
 		return connections.Distinct().ToList();
 	}
 
-	public async Task<List<AdmissionFormInheritanceIssueDto>> ValidatePolicyAsync(Guid registrationId)
+	public async Task<List<AdmissionFormInheritanceIssueDto>> ValidatePolicyAsync(Guid registrationId, bool validateAddresses = false)
 	{
 		var registration = await ReadDefinitionAsync(registrationId);
 		if (registration.Inheritance?.Enabled != true) return [];
@@ -183,7 +184,8 @@ public class AdmissionFormInheritanceService(
 				issues.Add(new() { Code = "InvalidSource", Message = "An approved source is not an available published Inquiry version." });
 			else
 			{
-				var composed = Compose(registration, inquiry, true);
+				var composed = ComposeCore(registration, inquiry, requireApprovedSource: true, publicSourceProjection: false,
+					validateAddresses: validateAddresses);
 				issues.AddRange(composed.Issues);
 				if (!composed.Definition.Sections.SelectMany(section => section.Fields).Any(field => field.FieldType != AdmissionFormFieldType.Static))
 					issues.Add(new() { Code = "EmptyRegistration", Message = "Each connected Inquiry must supply Registration questions, or add a Registration-only question." });
@@ -208,11 +210,20 @@ public class AdmissionFormInheritanceService(
 		=> ComposeCore(registration, inquiry, requireApprovedSource, false);
 
 	private static AdmissionFormInheritancePreviewDto ComposeCore(AdmissionFormDto registration, AdmissionFormDto inquiry,
-		bool requireApprovedSource, bool publicSourceProjection)
+		bool requireApprovedSource, bool publicSourceProjection, bool validateAddresses = false)
 	{
 		if (inquiry.Purpose != AdmissionFormPurpose.Inquiry)
 			return new() { Definition = registration, Issues = [new() { Code = "InvalidSource", Message = "Choose an Inquiry form as the source." }] };
-		var structuralIssues = ValidatePreviewRules(registration).Concat(ValidatePreviewRules(inquiry, allowRuntimeConstants: publicSourceProjection)).ToList();
+		var structuralIssues = ValidatePreviewRules(registration, validateAddressReferences: !validateAddresses)
+			.Concat(ValidatePreviewRules(inquiry, allowRuntimeConstants: publicSourceProjection, validateAddressReferences: !validateAddresses)).ToList();
+		if (validateAddresses)
+		{
+			// A standalone definition must still provide its own parents. Recheck order after
+			// composition because source-owned questions may move to a different section or step.
+			var addressIssues = AdmissionFormAddressValidation.Validate(registration, checkOrder: false)
+				.Concat(AdmissionFormAddressValidation.Validate(inquiry, checkOrder: false));
+			structuralIssues.AddRange(addressIssues.DistinctBy(issue => (issue.Code, issue.FieldIdentity)));
+		}
 		if (structuralIssues.Count > 0) return new() { Definition = registration, InquiryFormDefinitionId = inquiry.Id, Issues = structuralIssues };
 		var policy = Convert<AdmissionFormInheritancePolicy>(registration.Inheritance ?? new AdmissionFormInheritancePolicyDto());
 		if (!requireApprovedSource)
@@ -240,7 +251,11 @@ public class AdmissionFormInheritanceService(
 		definition.SectionCount = definition.Sections.Count;
 		var contextSections = Convert<List<AdmissionFormSectionDto>>(composition.InquiryContextSections);
 		var issues = Convert<List<AdmissionFormInheritanceIssueDto>>(composition.Issues);
-		if (issues.Count == 0) issues.AddRange(ValidatePreviewRules(definition, contextSections, publicSourceProjection));
+		if (issues.Count == 0)
+		{
+			issues.AddRange(ValidatePreviewRules(definition, contextSections, publicSourceProjection, validateAddressReferences: !validateAddresses));
+			if (validateAddresses) issues.AddRange(AdmissionFormAddressValidation.Validate(definition));
+		}
 		if (registration.CoreFieldPolicyVersion.HasValue)
 			foreach (var key in new[] { "Applicant.DateOfBirth", "Applicant.Gender" })
 				if (!AdmissionCoreFieldPolicy.IsGuaranteed(definition, key))
@@ -254,7 +269,7 @@ public class AdmissionFormInheritanceService(
 	}
 
 	private static List<AdmissionFormInheritanceIssueDto> ValidatePreviewRules(AdmissionFormDto form,
-		IReadOnlyCollection<AdmissionFormSectionDto>? contextSections = null, bool allowRuntimeConstants = false)
+		IReadOnlyCollection<AdmissionFormSectionDto>? contextSections = null, bool allowRuntimeConstants = false, bool validateAddressReferences = true)
 	{
 		var validation = new AdmissionFormValidationResultDto();
 		var validationSections = form.Sections.Concat(contextSections ?? []).ToList();
@@ -277,7 +292,7 @@ public class AdmissionFormInheritanceService(
 			{
 				AdmissionFormAppService.ValidateRule(ValidationRule(field.VisibilityRuleJson), codes, field.Code, validation);
 				AdmissionFormAppService.ValidateRule(ValidationRule(field.RequiredRuleJson), codes, field.Code, validation);
-				AdmissionFormAppService.ValidateValidationJson(field.ValidationJson, field.Code, codes, validation);
+				AdmissionFormAppService.ValidateValidationJson(field.ValidationJson, field.Code, codes, validation, validateAddressReferences);
 				if (field.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio)
 				{
 					AdmissionFormAppService.ValidateOptions(definitionsByCode[field.Code], codes, validation);

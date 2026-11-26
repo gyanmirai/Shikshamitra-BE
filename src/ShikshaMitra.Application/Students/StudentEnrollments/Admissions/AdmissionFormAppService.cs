@@ -408,6 +408,8 @@ public class AdmissionFormAppService(
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
 		var inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form);
 		var definition = Map(form, sections, fields);
+		var validateAddresses = form.Status == AdmissionFormStatus.Draft &&
+			form.Purpose is AdmissionFormPurpose.Inquiry or AdmissionFormPurpose.Registration;
 		var coreInput = ToInput(definition);
 		result.Errors.AddRange(AdmissionCoreFieldPolicy.Validate(coreInput, await GuaranteedInheritedCoreKeysAsync(coreInput)));
 		var usesInheritedFields = inheritance?.Enabled == true && inheritance.Sources.Count > 0;
@@ -463,14 +465,22 @@ public class AdmissionFormAppService(
 			if (field.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio) ValidateOptions(field, fieldCodes, result);
 			ValidateRule(field.VisibilityRuleJson, fieldCodes, field.Code, result);
 			ValidateRule(field.RequiredRuleJson, fieldCodes, $"Required:{field.Code}", result);
-			ValidateValidationJson(field.ValidationJson, field.Code, fieldCodes, result);
+			ValidateValidationJson(field.ValidationJson, field.Code, fieldCodes, result, validateAddressReferences: !validateAddresses);
 		}
 		ValidateDependencyCycles(fields, result);
+		var addressErrors = validateAddresses
+			? AdmissionFormAddressValidation.Validate(definition).Select(issue => issue.Code).ToList()
+			: [];
 		if (inheritance?.Enabled == true)
 		{
-			var inheritanceIssues = await LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().ValidatePolicyAsync(id);
-			result.Errors.AddRange(inheritanceIssues.Select(issue => $"{AdmissionFormInheritanceErrorCodes.IncompatibleSource}:{issue.Message}"));
+			var inheritanceIssues = await LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().ValidatePolicyAsync(id, validateAddresses);
+			foreach (var issue in inheritanceIssues)
+			{
+				if (AdmissionFormAddressValidation.IsAddressError(issue.Code)) addressErrors.Add(issue.Code);
+				else result.Errors.Add($"{AdmissionFormInheritanceErrorCodes.IncompatibleSource}:{issue.Message}");
+			}
 		}
+		result.Errors.AddRange(addressErrors.Distinct(StringComparer.Ordinal));
 		var matchingVersion = checkPublishedVersion && result.IsValid && form.Status == AdmissionFormStatus.Draft
 			? await FindMatchingPublishedVersionAsync(definition)
 			: null;
@@ -583,7 +593,8 @@ public class AdmissionFormAppService(
 		catch (JsonException) { result.Errors.Add($"InvalidJson:{owner}"); }
 	}
 
-	internal static void ValidateValidationJson(string? json, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	internal static void ValidateValidationJson(string? json, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result,
+		bool validateAddressReferences = true)
 	{
 		if (string.IsNullOrWhiteSpace(json)) return;
 		try
@@ -599,12 +610,13 @@ public class AdmissionFormAppService(
 				try { _ = new Regex(regex.GetString() ?? string.Empty); } catch (ArgumentException) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); }
 			if (root.TryGetProperty("minDate", out var minDate) && root.TryGetProperty("maxDate", out var maxDate) && DateTimeOffset.TryParse(minDate.GetString(), out var minDateValue) && DateTimeOffset.TryParse(maxDate.GetString(), out var maxDateValue) && minDateValue.Date > maxDateValue.Date)
 				result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}");
-			ValidateFieldFormat(root, code, knownFields, result);
+			ValidateFieldFormat(root, code, knownFields, result, validateAddressReferences);
 		}
 		catch (JsonException) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); }
 	}
 
-	private static void ValidateFieldFormat(JsonElement root, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	private static void ValidateFieldFormat(JsonElement root, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result,
+		bool validateAddressReferences)
 	{
 		if (!root.TryGetProperty("format", out var formatProperty)) return;
 		if (formatProperty.ValueKind != JsonValueKind.String) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); return; }
@@ -614,6 +626,7 @@ public class AdmissionFormAppService(
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}");
 			return;
 		}
+		if (!validateAddressReferences && (format is "state" or "city")) return;
 		if (string.Equals(format, "state", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "city", StringComparison.OrdinalIgnoreCase))
 			ValidateFieldReference(root, "countryField", code, knownFields, result);
 		if (string.Equals(format, "city", StringComparison.OrdinalIgnoreCase))

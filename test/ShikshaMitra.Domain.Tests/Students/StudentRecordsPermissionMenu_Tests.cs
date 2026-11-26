@@ -25,7 +25,7 @@ public class StudentRecordsPermissionMenu_Tests
 		bundle.Permissions.ShouldBe(expected);
 		bundle.DisplayNames.Keys.ShouldBe(expected);
 		var all = registry.Values.SelectMany(item => item.Permissions).ToArray();
-		all.Length.ShouldBe(113);
+		all.Length.ShouldBe(115);
 		all.Distinct().Count().ShouldBe(all.Length);
 	}
 }

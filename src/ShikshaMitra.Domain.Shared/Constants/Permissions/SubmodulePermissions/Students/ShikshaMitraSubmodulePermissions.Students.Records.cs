@@ -9,6 +9,23 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class Students
 	{
+		/// <summary>Read access to birthday occurrences in assigned academic scope.</summary>
+		public static class Records_Birthdays
+		{
+			private const string SubmoduleName = $"{ModuleName}.Records.Birthdays";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Records.Birthdays";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string OfficeScopeView = $"{SubmoduleName}.OfficeScope.View";
+
+			public static readonly string[] All = { View, OfficeScopeView };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ OfficeScopeView, $"{SubmoduleDisplayName}.OfficeScope.View" }
+			};
+		}
+
 		/// <summary>Medium-wise houses, membership, and student leadership.</summary>
 		public static class Records_HouseManagement
 		{

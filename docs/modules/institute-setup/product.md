@@ -110,8 +110,9 @@ Rooms Management changes must preserve these rules.
 | A room must reference valid building and room type records | Timetable and exam assignments depend on those links |
 | Capacity and benches must remain valid numeric values | Scheduling and room allocation use them |
 | Building floor data must stay consistent with room floor data | Staff need a reliable physical location map |
-| Creating or moving a room must fit the selected floor's configured room limit | A full floor needs a building configuration update before another room can be added |
-| A floor's room limit cannot fall below its saved room count | Building edits cannot invalidate existing room assignments |
+| Creating or moving a room must fit the selected floor's configured room limit | A full floor has no remaining room places |
+| A floor with assigned rooms keeps its saved name, number and capacity and cannot be removed | Building edits preserve existing room assignments |
+| Building edits keep the first saved floor | Every established building retains its first floor while it is being edited |
 | Delete behavior must respect downstream references | Timetable and examination flows may reference rooms |
 
 An existing room can be edited on a full floor because its own place is excluded from the capacity check.

@@ -35,6 +35,12 @@ public class BuildingRoomCapacityManager(
 			throw LimitError(RoomsManagementErrorCodes.FloorRoomLimitBelowUsage, floor, limit, count);
 	}
 
+	public void EnsureFloorIsUnused(Floor floor, int count)
+	{
+		if (count > 0)
+			throw LimitError(RoomsManagementErrorCodes.FloorInUse, floor, floor.TotalRoom, count);
+	}
+
 	public async Task<Dictionary<Guid, int>> GetRoomCountsAsync(Guid[] buildingIds)
 	{
 		if (buildingIds.Length == 0) return [];

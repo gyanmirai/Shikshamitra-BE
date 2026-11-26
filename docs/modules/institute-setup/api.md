@@ -29,18 +29,16 @@ Unsupported filters and sorting fields fail validation instead of filtering only
 JSON metadata is limited to 16 KiB, image files to 5 MiB, and the request to 6 MiB; metadata and image changes share the application transaction.
 Existing JSON room commands remain compatible.
 `GET /api/institute-setup/rooms/{id}/image/file` returns authenticated binary bytes or 204 when absent, with private no-store and nosniff headers.
-Building floors expose grouped `roomCount`; capacity conflicts use `RoomFloorLimitReached` or `FloorRoomLimitBelowUsage` under the existing Tenant Settings error prefix.
+Building floors expose grouped `roomCount`. Room placement conflicts use `RoomFloorLimitReached` under the Tenant Settings error prefix.
 Division room references are validated against the current tenant.
 Unassign current and retained historical division references before deleting a room; deletion does not silently clear academic records.
 
 ### Building floor capacity errors
 
-`PUT /api/institute-setup/buildings/{id}` rejects a floor `totalRoom` below its current saved-room count before changing the building or floors.
-The response is HTTP 400 `application/problem+json`, with `errorCode: ShikshaMitra.TenantSettings:FloorRoomLimitBelowUsage`, a contextual `detail`, and `data` containing `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount`.
-For a requested limit of 1 and two saved rooms, `detail` reads: `Cannot set total rooms to 1. Ground already has 2 rooms. Delete or reassign existing rooms before reducing the total room capacity.`
-The message remains available when development exception details and stack traces are disabled.
-`Room` currently has no active status or soft-delete flag; every saved room on the floor counts, and deleting or moving a room releases its place.
-A limit equal to or above the current count is allowed.
+`PUT /api/institute-setup/buildings/{id}` rejects changes to an occupied floor's name, number or capacity and rejects removal of an occupied floor. Unchanged floor details can accompany a building update.
+`FloorInUse` and `FloorRoomLimitBelowUsage` return HTTP 400 `application/problem+json` with the `ShikshaMitra.TenantSettings:` error prefix, localized `detail` and `data` containing `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount`. The second code applies to capacity reductions below the saved room count.
+Removing the first saved floor returns `FirstFloorCannotBeRemoved` when the floor is empty. The first floor is determined by saved floor number, with floor ID as the tie-breaker.
+Every saved room on the floor counts. Moving or deleting the last room allows floor details to be edited again.
 
 ## Academic date updates
 
@@ -269,7 +267,7 @@ These validations require no schema migration.
 
 | Capacity error code | Meaning |
 | --- | --- |
-| `ShikshaMitra.TenantSettings:RoomFloorLimitReached` | The selected floor has no room place available; increase its configured limit through the building update |
+| `ShikshaMitra.TenantSettings:RoomFloorLimitReached` | The selected floor is full. Choose another floor or move an existing room to free a place. |
 | `ShikshaMitra.TenantSettings:FloorRoomLimitBelowUsage` | The requested floor limit is below the number of saved rooms |
 
 Both business errors use HTTP 400 ProblemDetails with `errorCode`, a localized `detail`, and `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount` in its top-level `data` object.

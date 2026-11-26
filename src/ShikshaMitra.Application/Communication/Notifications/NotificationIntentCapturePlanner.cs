@@ -129,6 +129,25 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 					expiry, NotificationIntentState.NeedsReview, NotificationErrorCodes.RuleConfigurationInvalid));
 			}
 		}
-		return results;
+		if (results.Count < 2 || input.EventKey is not (AcademicNotificationEventKeys.SubjectAllocated or AcademicNotificationEventKeys.SubjectTeacherChanged))
+			return results;
+
+		return SuppressOverlappingSubjectClassTeacherNotices(results);
+	}
+
+	private static IReadOnlyList<NotificationIntentCaptureItem> SuppressOverlappingSubjectClassTeacherNotices(
+		IReadOnlyList<NotificationIntentCaptureItem> items)
+	{
+		var directScopes = items.Where(item => !item.CaptureOutcome.HasValue)
+			.SelectMany(item => item.Recipients.Where(recipient => recipient.UserId.HasValue &&
+				recipient.Kind is "AssignedTeacher" or "PreviousTeacher"),
+				(item, recipient) => (item.RuleId, item.RuleRevision, recipient.UserId, item.Scope))
+			.ToLookup(candidate => (candidate.RuleId, candidate.RuleRevision, candidate.UserId), candidate => candidate.Scope);
+
+		return items.Select(item => item.CaptureOutcome.HasValue ? item : item with
+		{
+			Recipients = item.Recipients.Where(recipient => recipient.Kind != "ClassTeacher" ||
+				!directScopes[(item.RuleId, item.RuleRevision, recipient.UserId)].Any(scope => scope != item.Scope)).ToArray()
+		}).Where(item => item.Recipients.Count > 0).ToArray();
 	}
 }

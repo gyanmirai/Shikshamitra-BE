@@ -43,12 +43,21 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
 		if (withProration)
 		{
-			// Hydrate pre-removal storage; production no longer has an attachment transition.
+			// Reconstruct an already-published legacy structure. New publication now
+			// requires an explicit pin; retired storage must remain ineffective on reads.
 			using var hydration = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
 			var repository = GetRequiredService<IRepository<FeeStructure, Guid>>();
 			var legacy = await repository.GetAsync(draft.Id);
+			// This historical year predates default configuration. Do not let the
+			// new ready-candidate default obscure whether retired stored IDs are ignored.
+			var prorationRepository = GetRequiredService<IRepository<ProrationPolicy, Guid>>();
+			var syntheticDefault = await prorationRepository.GetAsync(candidate.ProrationPolicyId!.Value);
+			typeof(ProrationPolicy).GetProperty(nameof(ProrationPolicy.IsDefault))!.SetValue(syntheticDefault, false);
+			await prorationRepository.UpdateAsync(syntheticDefault, autoSave: true);
+			legacy.AttachProrationPolicy(null, null);
 			typeof(FeeStructure).GetProperty(nameof(FeeStructure.ProrationPolicyId))!.SetValue(legacy, legacyPolicyId);
 			typeof(FeeStructure).GetProperty(nameof(FeeStructure.ProrationPolicyVersionId))!.SetValue(legacy, legacyVersionId);
+			legacy.Lock();
 			await repository.UpdateAsync(legacy, autoSave: true);
 			draft.ConcurrencyStamp = legacy.ConcurrencyStamp;
 			await hydration.CompleteAsync();

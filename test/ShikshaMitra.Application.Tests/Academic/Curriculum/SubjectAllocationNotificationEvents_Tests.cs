@@ -15,6 +15,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Xunit;
+using ClassTeacherRecord = ShikshaMitra.Academic.ClassTeacher.ClassTeacher;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -65,6 +66,62 @@ public class SubjectAllocationNotificationEvents_Tests : SubjectTeacherReassignm
 			var current = await reader.LoadAsync(change, DateTimeOffset.UtcNow, CancellationToken.None);
 			current.CurrentRecipients.Select(x => (x.Kind, x.EmployeeId!.Value)).ToHashSet()
 				.SetEquals([("AssignedTeacher", NewTeacher), ("PreviousTeacher", OldTeacher)]).ShouldBeTrue();
+		});
+	}
+
+	[Theory]
+	[InlineData(AcademicNotificationEventKeys.SubjectAllocated, false)]
+	[InlineData(AcademicNotificationEventKeys.SubjectTeacherChanged, false)]
+	[InlineData(AcademicNotificationEventKeys.SubjectAllocated, true)]
+	[InlineData(AcademicNotificationEventKeys.SubjectTeacherChanged, true)]
+	public async Task Overlapping_subject_staff_receive_one_notice_per_effective_rule(string eventKey, bool separateDivisionRule)
+	{
+		using var actor = AsAdmin();
+		using var school = Tenant.Change(TenantId, "Synthetic school");
+		var isPublication = eventKey == AcademicNotificationEventKeys.SubjectAllocated;
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await SeedAllocationAsync();
+			var assignments = GetRequiredService<IRepository<AssignedSubject, Guid>>();
+			var assignment = await assignments.GetAsync(AssignmentId);
+			assignment.ChangeStatus(isPublication ? SubjectStatus.Draft : SubjectStatus.Published);
+			await assignments.UpdateAsync(assignment, autoSave: true);
+			await GetRequiredService<IRepository<ClassTeacherRecord, Guid>>().InsertAsync(new(
+				Guid.NewGuid(), TenantId, StandardId, DivisionId, OldTeacher, AcademicMediumId), autoSave: true);
+			await AddRuleAsync(eventKey, isPublication
+				? ["AssignedTeacher", "ClassTeacher"]
+				: ["AssignedTeacher", "PreviousTeacher", "ClassTeacher"]);
+			if (separateDivisionRule)
+			{
+				var medium = await GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(AcademicMediumId);
+				var board = await GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
+				await AddRuleAsync(eventKey, ["ClassTeacher"], NotificationRuleScope.Create(
+					board.AcademicYearId, board.Id, medium.Id, StandardId, DivisionId));
+			}
+		});
+
+		await WithTransactionalUnitOfWorkAsync(async () =>
+		{
+			if (isPublication) await Allocations.PublishAsync([AssignmentId]);
+			else await ChangeTeacherAsync();
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var intents = await GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(
+				x => x.SourceId == AssignmentId && x.EventKey == eventKey);
+			var reader = GetRequiredService<NotificationIntentSourceReader>();
+			var recipients = new List<NotificationRecipientRefDto>();
+			foreach (var intent in intents)
+				recipients.AddRange((await reader.LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients);
+
+			var directKind = isPublication ? "AssignedTeacher" : "PreviousTeacher";
+			recipients.Where(x => x.EmployeeId == OldTeacher).Select(x => x.Kind).OrderBy(x => x).ToArray()
+				.ShouldBe(separateDivisionRule
+					? new[] { "ClassTeacher", directKind }.OrderBy(x => x).ToArray()
+					: [directKind]);
+			recipients.ShouldContain(x => x.Kind == "AssignedTeacher" && x.EmployeeId == (isPublication ? OtherTeacher : NewTeacher));
+			recipients.Count.ShouldBe(separateDivisionRule ? 3 : 2);
 		});
 	}
 
@@ -130,7 +187,7 @@ public class SubjectAllocationNotificationEvents_Tests : SubjectTeacherReassignm
 				.CurrentRecipients.ShouldBeEmpty());
 	}
 
-	private async Task AddRuleAsync(string eventKey, string[] kinds)
+	private async Task AddRuleAsync(string eventKey, string[] kinds, NotificationRuleScope? scope = null)
 	{
 		var headers = new List<Guid>();
 		foreach (var kind in eventKey == AcademicNotificationEventKeys.SubjectWithdrawn ? new[] { "Guardian" } : kinds)
@@ -143,7 +200,7 @@ public class SubjectAllocationNotificationEvents_Tests : SubjectTeacherReassignm
 			await GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(revision, autoSave: true);
 			headers.Add(header.Id);
 		}
-		var rule = new NotificationRule(Guid.NewGuid(), TenantId, eventKey, NotificationRuleScope.Create());
+		var rule = new NotificationRule(Guid.NewGuid(), TenantId, eventKey, scope ?? NotificationRuleScope.Create());
 		var settings = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false,
 			kinds, [CommunicationChannelType.InApp], headers,
 			NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");

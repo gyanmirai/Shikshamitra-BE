@@ -30,5 +30,5 @@ Do not mark a batch confirmed before attendance facts exist.
 
 ## Preferred API
 
-Prefer `POST /api/hr/attendance/integration-runs` with `ImportAttendance.Add`.
+Prefer `POST /api/hr/attendance/integration-runs` with `HR.AttendanceAndLeave.BiometricAttendance.Add` and school-wide HR scope in the target tenant.
 Raw SQL is allowed only when it mirrors validation, row audit, and confirmation behavior.

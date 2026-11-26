@@ -3,18 +3,22 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.WebUtilities;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Status;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -29,8 +33,10 @@ using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 using Xunit;
 
@@ -327,6 +333,16 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 	public async Task Payroll_Register_Should_Include_Left_Employee_For_Final_Month_And_Lock()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		using (var scope = Factory.Services.CreateScope())
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
+		{
+			var tenants = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
+			var tenant = await tenants.GetAsync(Guid.Parse(TestAuthHandler.TestTenantId));
+			tenant.SetProperty("InstituteName", "Synthetic payroll school");
+			tenant.SetProperty("Address1", "Synthetic payroll test address");
+			await tenants.UpdateAsync(tenant);
+			await uow.CompleteAsync();
+		}
 
 		var before = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-03");
@@ -336,8 +352,20 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 			dateOfJoining: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "PayrollLeftFinal");
-		await MarkAttendanceAsync(employee.Id, "11-03-2026");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 3, 11));
 		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 3, 20));
+
+		using var csv = new MultipartFormDataContent();
+		using var csvFile = new ByteArrayContent(Encoding.UTF8.GetBytes(
+			$"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No\n11-03-2026,{employee.EmployeeCode},,,FullDayLeave,Correction,,"));
+		csvFile.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+		csv.Add(csvFile, "File", $"attendance-{Guid.NewGuid():N}.csv");
+		using var csvPreview = await Client.PostAsync("/api/attendance-import/preview", csv);
+		csvPreview.StatusCode.ShouldBe(HttpStatusCode.OK, await csvPreview.Content.ReadAsStringAsync());
+		var import = await csvPreview.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
+		import.ShouldNotBeNull();
+		import.CanConfirm.ShouldBeTrue();
 
 		var marchPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-03&page=0&pageSize=100&forceRefresh=true");
@@ -374,6 +402,44 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 			JsonOptions);
 		var lockBody = await lockResponse.Content.ReadAsStringAsync();
 		lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, lockBody);
+
+		using var attendanceEdit = await Client.PostAsJsonAsync(
+			"/api/hr/attendance/take-attendance/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = "11-03-2026",
+				Entries = [new TakeAttendanceSaveEntryDto { EmployeeId = employee.Id, StatusWire = "ABSENT" }]
+			},
+			JsonOptions);
+		using var csvConfirm = await Client.PostAsJsonAsync("/api/attendance-import/confirm",
+			new AttendanceImportConfirmRequestDto { PreviewToken = import.PreviewToken! }, JsonOptions);
+		using var integration = await Client.PostAsJsonAsync("/api/hr/attendance/integration-runs",
+			new AttendanceIntegrationRunRequestDto
+			{
+				FileName = $"integration-{Guid.NewGuid():N}.json",
+				Rows = [new AttendanceIntegrationRunRowDto
+				{
+					EmployeeId = employee.Id,
+					AttendanceDate = "2026-03-11",
+					Status = EmployeeAttendanceStatusType.FullDayLeave
+				}]
+			}, JsonOptions);
+		foreach (var response in new[] { attendanceEdit, csvConfirm, integration })
+		{
+			var body = await response.Content.ReadAsStringAsync();
+			response.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+			body.ShouldContain(HRErrorCodes.AttendancePayrollLocked);
+		}
+
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin())
+		{
+			var attendance = await scope.ServiceProvider.GetRequiredService<IEmployeeAttendanceRepository>()
+				.GetAsync(x => x.EmployeeId == employee.Id && x.AttendanceDate == new DateOnly(2026, 3, 11));
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
+			await uow.CompleteAsync();
+		}
 
 		var junePreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");

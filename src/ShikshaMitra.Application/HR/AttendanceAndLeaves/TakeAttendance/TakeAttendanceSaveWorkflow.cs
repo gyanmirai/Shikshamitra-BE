@@ -21,7 +21,8 @@ public class TakeAttendanceSaveWorkflow(
 	TakeAttendanceEmployeeStageResolver employeeStageResolver,
 	TakeAttendanceEntryWriter entryWriter,
 	TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService,
-	TakeAttendancePayrollSnapshotInvalidator payrollSnapshotInvalidator
+	TakeAttendancePayrollSnapshotInvalidator payrollSnapshotInvalidator,
+	AttendancePayrollWriteGuard payrollWriteGuard
 	)
 	: ApplicationService, ITransientDependency
 {
@@ -59,6 +60,7 @@ public class TakeAttendanceSaveWorkflow(
 		var requestedEmployeeIds = parsedEntries.Select(x => x.Entry.EmployeeId).Distinct().ToList();
 		var employeeStageMap = await employeeStageResolver.ResolveEmployeeStagesAsync(requestedEmployeeIds, scope);
 		await EnsureRequestedEmployeesAreInScopeAsync(requestedEmployeeIds, dateOnly, scope, employeeStageMap);
+		await payrollWriteGuard.EnsureEditableAsync(requestedEmployeeIds.Select(id => (id, dateOnly)));
 		await EnsureNoApprovedLeaveAttendanceMutationAsync(requestedEmployeeIds, dateOnly);
 
 		var upserted = 0;

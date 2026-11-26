@@ -18,7 +18,8 @@ public class AttendanceImportConfirmWorkflow(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
-	AttendanceCaptureModeLookupResolver captureModeLookupResolver)
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
+	AttendancePayrollWriteGuard payrollWriteGuard)
 	: ApplicationService
 {
 	public async Task<AttendanceImportConfirmResponseDto> ConfirmAsync(AttendanceImportConfirmRequestDto input)
@@ -44,6 +45,7 @@ public class AttendanceImportConfirmWorkflow(
 			throw new BusinessException(HRErrorCodes.AttendanceImportNoValidRows);
 		}
 
+		await payrollWriteGuard.EnsureEditableAsync(cached.Rows.Select(x => (x.EmployeeId, x.AttendanceDate)));
 		var employeeIds = cached.Rows.Select(x => x.EmployeeId).Distinct().ToList();
 		var minDate = cached.Rows.Min(x => x.AttendanceDate);
 		var maxDate = cached.Rows.Max(x => x.AttendanceDate);

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.Employees;
@@ -31,6 +32,25 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 	private const string IntegrationRunsUrl = "/api/hr/attendance/integration-runs";
 
 	public AttendanceImportApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Theory]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View)]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Integration_Run_Requires_Import_Add_Permission_And_School_Wide_Scope(string permission)
+	{
+		using var client = permission == ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View
+			? Factory.CreateClient()
+			: CreateClientAs(Guid.NewGuid());
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, permission);
+		using var response = await client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
+		{
+			FileName = "permission-test.json",
+			Rows = [new AttendanceIntegrationRunRowDto { EmployeeId = Guid.NewGuid(), AttendanceDate = "2026-04-12" }]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -57,6 +77,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"ManualCsv{Guid.NewGuid():N}");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
 		using var previewContent = BuildCsvUpload($"11-04-2026,{employee.EmployeeCode},09:00 AM,09:30 AM,,Short raw punch,{employee.FullName},{employee.MobileNo}");
 
@@ -64,6 +85,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var preview = await previewResponse.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
 		preview.ShouldNotBeNull();
+		preview.CanConfirm.ShouldBeTrue(await previewResponse.Content.ReadAsStringAsync());
 		preview.Rows.Single().Status.ShouldBe(nameof(EmployeeAttendanceStatusType.Present));
 
 		var confirmResponse = await Client.PostAsJsonAsync($"{BaseUrl}/confirm", new AttendanceImportConfirmRequestDto
@@ -123,6 +145,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = new DateOnly(2026, 4, 13);
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"IntegrationTimeOnly{Guid.NewGuid():N}");
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId, attendanceDate);
 
 		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
 		{
@@ -159,6 +182,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = new DateOnly(2026, 4, 14);
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"IntegrationNormalize{Guid.NewGuid():N}");
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId, attendanceDate);
 
 		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
 		{

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,11 +15,19 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 public class AttendanceIntegrationRunWorkflow(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
+	TakeAttendanceAccessService accessService,
+	AttendancePayrollWriteGuard payrollWriteGuard,
 	AttendanceIntegrationRunAttendanceWriter attendanceWriter)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AttendanceIntegrationRunResponseDto> RecordIntegrationRunAsync(AttendanceIntegrationRunRequestDto input)
 	{
+		var scope = await accessService.EnsureCanOperateAttendanceAsync();
+		if (!CurrentTenant.Id.HasValue || scope.TenantId != CurrentTenant.Id || !HrUserScopeAccess.HasHrWideAccess(scope))
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
 		if (input.Rows == null || input.Rows.Count == 0)
 		{
 			throw new BusinessException(HRErrorCodes.AttendanceImportNoValidRows);
@@ -28,6 +38,7 @@ public class AttendanceIntegrationRunWorkflow(
 			.Select(x => new ParsedIntegrationRow(x, AttendanceIntegrationRunParsing.ParseRowDate(x.AttendanceDate)))
 			.ToList();
 		var monthYear = ResolvePayrollMonth(parsedRows);
+		await payrollWriteGuard.EnsureEditableAsync(parsedRows.Select(x => (x.Row.EmployeeId, x.AttendanceDate)));
 		var batch = CreateBatch(input, batchId, monthYear);
 
 		await attendanceImportBatchRepository.InsertAsync(batch, autoSave: true);

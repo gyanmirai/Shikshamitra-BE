@@ -144,10 +144,14 @@ public class AttendanceRegisterLookupReader(
 		return result;
 	}
 
+	internal Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(
+		List<RegisterProjection> rows) =>
+		BuildLockLookupAsync(rows.Select(x => (x.EmployeeId, x.AttendanceDate)));
+
 	internal async Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(
-		List<RegisterProjection> rows)
+		IEnumerable<(Guid EmployeeId, DateOnly AttendanceDate)> attendance)
 	{
-		var keys = rows.Select(x => (x.EmployeeId, MonthYear: AttendanceRegisterProjection.ToMonthYear(x.AttendanceDate))).Distinct().ToList();
+		var keys = attendance.Select(x => (x.EmployeeId, MonthYear: AttendanceRegisterProjection.ToMonthYear(x.AttendanceDate))).Distinct().ToList();
 		var result = keys.ToDictionary(x => x, _ => new PayrollLockInfo(false, null));
 		if (keys.Count == 0)
 		{
@@ -167,7 +171,9 @@ public class AttendanceRegisterLookupReader(
 			.Select(x => new { x.EmployeeId, x.MonthYear }));
 		foreach (var slip in finalizedSlips)
 		{
-			result[(slip.EmployeeId, slip.MonthYear)] = new PayrollLockInfo(true, $"Payroll finalized for {slip.MonthYear}.");
+			var key = (slip.EmployeeId, slip.MonthYear);
+			if (result.ContainsKey(key))
+				result[key] = new PayrollLockInfo(true, $"Payroll finalized for {slip.MonthYear}.");
 		}
 
 		var lockedSnapshots = await asyncExecuter.ToListAsync(
@@ -178,7 +184,9 @@ public class AttendanceRegisterLookupReader(
 			.Select(x => new { x.EmployeeId, x.MonthYear }));
 		foreach (var snapshot in lockedSnapshots)
 		{
-			result[(snapshot.EmployeeId, snapshot.MonthYear)] = new PayrollLockInfo(true, $"Payroll locked for {snapshot.MonthYear}.");
+			var key = (snapshot.EmployeeId, snapshot.MonthYear);
+			if (result.ContainsKey(key))
+				result[key] = new PayrollLockInfo(true, $"Payroll locked for {snapshot.MonthYear}.");
 		}
 
 		return result;

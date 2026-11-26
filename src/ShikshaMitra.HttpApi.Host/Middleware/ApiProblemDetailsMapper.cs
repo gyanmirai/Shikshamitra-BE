@@ -98,6 +98,7 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.LeaveAlreadyCancelled => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
+			HRErrorCodes.AttendancePayrollLocked => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiPolicyInUse => StatusCodes.Status409Conflict,
 			HRErrorCodes.CompensationPreviewStale or HRErrorCodes.PfManagementChanged => StatusCodes.Status409Conflict,

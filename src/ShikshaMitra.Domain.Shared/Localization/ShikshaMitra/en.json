@@ -730,6 +730,7 @@
         "HR:Leave:020216": "Attendance import row save request does not match the imported rows.",
         "HR:Leave:020217": "Duplicate columns: each field may appear only once. Use Staff or Employee headers, not both aliases.",
         "HR:Attendance:020315": "Attendance cannot be changed for an approved leave day.",
+        "HR:Attendance:020316": "Attendance cannot be changed because payroll for this staff member and month is locked or finalized.",
         "HR:Payroll:030009": "EmployeeId is required.",
         "HR:Payroll:030010": "An error occurred while fetching the salary slip. Please try again.",
         "HR:Payroll:030019": "Payroll snapshot schema is not applied. Apply the latest database migration and try again.",

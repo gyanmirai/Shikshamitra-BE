@@ -25,14 +25,14 @@ public class PayrollPreviewRunAppService(
 	IRepository<PayrollRunReview, Guid> runReviews,
 	IRepository<PayrollEmployeeClaim, Guid> claims,
 	IRepository<PayrollSubmission, Guid> submissions,
-	IRepository<PayrollCommandReceipt, Guid> receipts,
-	IRepository<PayslipDocument, Guid> documents,
 	PayrollMonthCoverageReader coverage,
 	PayrollScopedEmployeeResolver scopeResolver,
 	PayrollAcademicYearScopeResolver academicYearResolver,
-	IPayrollInputRevisionStore revisions,
-	IBackgroundJobManager jobs) : ApplicationService, IPayrollPreviewRunAppService
+	IPayrollInputRevisionStore revisions) : ApplicationService, IPayrollPreviewRunAppService
 {
+	private IRepository<PayrollCommandReceipt, Guid> Receipts =>
+		LazyServiceProvider.LazyGetRequiredService<IRepository<PayrollCommandReceipt, Guid>>();
+
 	[UnitOfWork(IsDisabled = true)]
 	public virtual async Task<PayrollPreviewStatusDto> StartAsync(StartPayrollPreviewRequest request)
 	{
@@ -49,7 +49,7 @@ public class PayrollPreviewRunAppService(
 		if (request.CommandKey.HasValue)
 		{
 			if (request.CommandKey == Guid.Empty) throw new BusinessException("PAYROLL_PREVIEW_COMMAND_INVALID");
-			var receipt = await receipts.FindAsync(x => x.ActorId == actor && x.Command == command && x.Key == request.CommandKey.Value);
+			var receipt = await Receipts.FindAsync(x => x.ActorId == actor && x.Command == command && x.Key == request.CommandKey.Value);
 			if (receipt != null)
 			{
 				if (receipt.Fingerprint != requestFingerprint) throw new BusinessException("PAYROLL_COMMAND_KEY_CONFLICT");
@@ -59,7 +59,7 @@ public class PayrollPreviewRunAppService(
 		async Task RecordAsync(PayrollPreviewRun run, bool reused)
 		{
 			if (request.CommandKey is { } key && CurrentTenant.Id is { } tenant)
-				await receipts.InsertAsync(new PayrollCommandReceipt(GuidGenerator.Create(), tenant, actor,
+				await Receipts.InsertAsync(new PayrollCommandReceipt(GuidGenerator.Create(), tenant, actor,
 					command, key, requestFingerprint, run.Id, JsonSerializer.Serialize(new { Reused = reused })));
 		}
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(await GetScopedRunsAsync(canonicalMonth, academicYear, fingerprint));
@@ -78,6 +78,7 @@ public class PayrollPreviewRunAppService(
 		var run = new PayrollPreviewRun(GuidGenerator.Create(), CurrentTenant.Id, CurrentUser.Id!.Value,
 			canonicalMonth, academicYear, fingerprint, scoped.Count, Clock.Now);
 		await runs.InsertAsync(run, autoSave: true);
+		var jobs = LazyServiceProvider.LazyGetRequiredService<IBackgroundJobManager>();
 		await jobs.EnqueueAsync(new PayrollPreviewJobArgs { TenantId = CurrentTenant.Id, RunId = run.Id });
 		await RecordAsync(run, reused: false);
 		await uow.CompleteAsync();
@@ -253,6 +254,7 @@ public class PayrollPreviewRunAppService(
 		if (legacyRows.Count > 0)
 		{
 			var slipIds = legacyRows.Select(x => x.Id).ToList();
+			var documents = LazyServiceProvider.LazyGetRequiredService<IRepository<PayslipDocument, Guid>>();
 			var documentQuery = await documents.GetQueryableAsync();
 			var currentDocuments = await AsyncExecuter.ToListAsync(documentQuery.Where(x => slipIds.Contains(x.SalarySlipId) &&
 				!documentQuery.Any(other => other.SalarySlipId == x.SalarySlipId && other.Revision > x.Revision))

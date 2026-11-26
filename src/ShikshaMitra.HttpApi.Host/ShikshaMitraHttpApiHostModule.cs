@@ -118,6 +118,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
 			.RemoveAllLoggers();
 		services.AddHostedService<ShikshaMitra.Diagnostics.ApiRequestTimingObserver>();
+		services.AddHostedService<ShikshaMitra.Diagnostics.PayrollReadActivationWarmup>();
 		services.AddRateLimiter(options =>
 		{
 			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

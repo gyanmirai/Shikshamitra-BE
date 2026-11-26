@@ -9,27 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-try {
-    [xml]$document = $env:AZURE_PUBLISH_PROFILE
-}
-catch {
-    throw 'The Azure publish profile could not be parsed.'
-}
-
-$profile = $document.publishData.publishProfile |
-    Where-Object { $_.publishMethod -eq 'MSDeploy' } | Select-Object -First 1
-$scmEndpoint = [string]$profile.publishUrl
-$site = [regex]::Escape($ExpectedSiteName)
-if ($scmEndpoint -notmatch "^$site(?:-[a-z0-9]+)?\.scm(?:\.[a-z0-9-]+)*\.azurewebsites\.net(?::443)?$") {
-    throw 'The Azure publish profile does not match the expected App Service SCM host.'
-}
-
-if (!$profile.userName -or !$profile.userPWD) {
-    throw 'The Azure publish profile is missing its deployment credentials.'
-}
-
-$password = ConvertTo-SecureString -String $profile.userPWD -AsPlainText -Force
-$credential = [pscredential]::new($profile.userName, $password)
+$scm = & (Join-Path $PSScriptRoot 'Get-AzureScmConnection.ps1') -ExpectedSiteName $ExpectedSiteName
 $files = @(
     'ShikshaMitra.HttpApi.Host.dll',
     'ShikshaMitra.HttpApi.dll',
@@ -45,8 +25,8 @@ foreach ($name in $files) {
     }
 
     try {
-        $response = Invoke-WebRequest -Uri "https://$scmEndpoint/api/vfs/site/wwwroot/$name" `
-            -Authentication Basic -Credential $credential -MaximumRedirection 0 -SkipHttpErrorCheck -TimeoutSec 30
+        $response = Invoke-WebRequest -Uri "$($scm.BaseUrl)/api/vfs/site/wwwroot/$name" `
+            -Authentication Basic -Credential $scm.Credential -MaximumRedirection 0 -SkipHttpErrorCheck -TimeoutSec 30
     }
     catch {
         throw "Could not read $name from the expected Azure SCM host ($($_.Exception.GetType().Name))."

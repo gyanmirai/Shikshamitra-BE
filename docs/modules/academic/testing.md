@@ -266,7 +266,10 @@ The report case submits an Academic export over HTTP and runs the saved job thro
 
 ## Staging notification route check
 
-The [backend deployment workflow](../../../.github/workflows/deploy.yml) checks the Academic catalogue, rules, history, recent deliveries, and unsaved template preview routes in staging OpenAPI after the OpenID startup check passes. The anonymous catalogue request must require sign-in. If this check fails, the [check script](../../../scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1) attempts to compare the deployed Web App files against the publish output using Azure SCM. It reports whether the files match, differ, or cannot be read. The signed-in school workflow and live provider delivery require separate verification.
+The [backend deployment workflow](../../../.github/workflows/deploy.yml) verifies the deployed application binaries and IIS configuration against the publish output using Azure SCM before checking OpenID startup.
+After startup passes, the [Academic route check](../../../scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1) checks the catalogue, rules, history, recent deliveries, and unsaved template preview routes in staging OpenAPI.
+The anonymous catalogue request must require sign-in.
+The signed-in school workflow and live provider delivery require separate verification.
 
 ## Weekly lecture requirements impact
 

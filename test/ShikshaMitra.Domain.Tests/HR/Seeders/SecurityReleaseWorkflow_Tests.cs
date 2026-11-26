@@ -53,6 +53,8 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("- name: Deploy to Azure Web App", workflow);
 		Assert.Contains("uses: azure/webapps-deploy@v3", workflow);
 		Assert.Contains("publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}", workflow);
+		Assert.Contains("clean: false", deployment);
+		Assert.Contains("./scripts/deployment/Test-DeployedBackendFiles.ps1", deployment);
 		Assert.Contains("- name: Verify deployed API startup", workflow);
 		Assert.Contains("https://stage-api.gyanmirai.in/.well-known/openid-configuration", workflow);
 		Assert.Contains("- name: Verify deployed Academic notification routes", workflow);
@@ -66,12 +68,13 @@ public class SecurityReleaseWorkflow_Tests
 		var publishGate = workflow.IndexOf("- name: Validate Azure publish profile", StringComparison.Ordinal);
 		var migrate = workflow.IndexOf("- name: Run DbMigrator", StringComparison.Ordinal);
 		var deploy = workflow.IndexOf("- name: Deploy to Azure Web App", StringComparison.Ordinal);
+		var deployedFiles = workflow.IndexOf("- name: Verify deployed backend files", StringComparison.Ordinal);
 		var startup = workflow.IndexOf("- name: Verify deployed API startup", StringComparison.Ordinal);
 		var routes = workflow.IndexOf("- name: Verify deployed Academic notification routes", StringComparison.Ordinal);
 		Assert.True(startupGate < upload && upload < deployJob && extract < migrate && publishGate < migrate && migrate < deploy,
 			"Validate the build before uploading it, extract and validate the release before migration, and migrate before deployment.");
-		Assert.True(deploy < startup && startup < routes,
-			"The Academic notification route check must run after deployment and startup.");
+		Assert.True(deploy < deployedFiles && deployedFiles < startup && startup < routes,
+			"Verify the deployed files before startup and check the Academic notification routes afterward.");
 	}
 
 	[Fact]

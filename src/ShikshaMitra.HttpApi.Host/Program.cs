@@ -5,6 +5,7 @@ using Serilog;
 using Serilog.Events;
 using ShikshaMitra.Controllers.Communication.Notifications;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra;
@@ -15,7 +16,7 @@ public class Program
 
 	public async static Task<int> Main(string[] args)
 	{
-		Log.Logger = new LoggerConfiguration()
+		var logger = new LoggerConfiguration()
 #if DEBUG
 			.MinimumLevel.Debug()
 #else
@@ -29,9 +30,22 @@ public class Program
 				logEvent.Properties.TryGetValue("Path", out var path) && path is ScalarValue { Value: string requestPath } &&
 				requestPath.TrimEnd('/').Equals(WhatsAppNotificationWebhookController.RoutePath, StringComparison.OrdinalIgnoreCase))
 			.Enrich.FromLogContext()
-			.WriteTo.Async(c => c.File("Logs/logs.txt"))
-			.WriteTo.Async(c => c.Console())
-			.CreateLogger();
+			.WriteTo.Async(c => c.Console());
+
+		if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME")))
+		{
+			logger.WriteTo.Async(c => c.File("Logs/logs.txt"));
+		}
+		else if (Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } appServiceHome &&
+			Path.IsPathFullyQualified(appServiceHome))
+		{
+			// App Service replaces the deployment directory while the previous worker shuts down.
+			var logPath = Path.Combine(appServiceHome, "LogFiles", "Application", "shikshamitra-.log");
+			logger.WriteTo.Async(c => c.File(logPath, rollingInterval: RollingInterval.Day,
+				fileSizeLimitBytes: 10 * 1024 * 1024, rollOnFileSizeLimit: true, retainedFileCountLimit: 10, shared: true));
+		}
+
+		Log.Logger = logger.CreateLogger();
 
 		try
 		{

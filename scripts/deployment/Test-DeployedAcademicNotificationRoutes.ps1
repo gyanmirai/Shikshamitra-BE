@@ -3,9 +3,6 @@ param(
     [Parameter(Mandatory)]
     [uri]$ApiBaseUri,
 
-    [Parameter(Mandatory)]
-    [string]$PublishedDirectory,
-
     [ValidateRange(1, 12)]
     [int]$Attempts = 6,
 
@@ -14,66 +11,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Write-DeployedFileComparison {
-    param([System.Net.Http.HttpClient]$Client)
-
-    if ([string]::IsNullOrWhiteSpace($env:AZURE_PUBLISH_PROFILE)) {
-        Write-Warning 'Azure file comparison is unavailable without the deploy publish profile.'
-        return
-    }
-
-    try {
-        [xml]$document = $env:AZURE_PUBLISH_PROFILE
-        $profile = $document.publishData.publishProfile |
-            Where-Object { $_.publishMethod -eq 'MSDeploy' } | Select-Object -First 1
-        $scmEndpoint = [string]$profile.publishUrl
-        if ($scmEndpoint -notmatch '^[a-z0-9-]+\.scm(?:\.[a-z0-9-]+)*\.azurewebsites\.net(?::443)?$') {
-            Write-Warning 'The deploy publish profile did not identify an Azure SCM endpoint.'
-            return
-        }
-
-        $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$($profile.userName):$($profile.userPWD)"))
-        foreach ($name in 'ShikshaMitra.HttpApi.dll', 'ShikshaMitra.HttpApi.Host.dll', 'web.config') {
-            $localPath = Join-Path $PublishedDirectory $name
-            if (!(Test-Path -LiteralPath $localPath -PathType Leaf)) {
-                Write-Warning "The build package does not contain $name."
-                continue
-            }
-
-            $request = [System.Net.Http.HttpRequestMessage]::new('GET', "https://$scmEndpoint/api/vfs/site/wwwroot/$name")
-            $response = $null
-            try {
-                $request.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Basic', $basic)
-                $response = $Client.SendAsync($request).GetAwaiter().GetResult()
-                if (!$response.IsSuccessStatusCode) {
-                    Write-Warning "Azure SCM returned HTTP $([int]$response.StatusCode) for $name."
-                    continue
-                }
-
-                $localHash = (Get-FileHash -LiteralPath $localPath -Algorithm SHA256).Hash
-                $remoteHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-                    $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()))
-                if ($localHash -eq $remoteHash) {
-                    Write-Output "Azure wwwroot file $name matches the build package."
-                }
-                else {
-                    Write-Warning "Azure wwwroot file $name differs from the build package."
-                }
-            }
-            catch {
-                Write-Warning "Azure file comparison failed for $name ($($_.Exception.GetType().Name))."
-            }
-            finally {
-                if ($response) { $response.Dispose() }
-                $request.Dispose()
-            }
-        }
-    }
-    catch {
-        Write-Warning "Azure file comparison could not start ($($_.Exception.GetType().Name))."
-    }
-}
 
 function Test-CatalogueChallenge {
     param(
@@ -147,7 +84,6 @@ try {
         if ($attempt -lt $Attempts) { Start-Sleep -Seconds $RetryDelaySeconds }
     }
 
-    Write-DeployedFileComparison -Client $client
     throw 'Staging did not expose the Academic notification routes from this deployment.'
 }
 finally {

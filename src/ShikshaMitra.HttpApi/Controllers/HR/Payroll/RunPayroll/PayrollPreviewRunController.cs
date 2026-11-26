@@ -13,19 +13,27 @@ namespace ShikshaMitra.Controllers.HR.Payroll.RunPayroll;
 [RemoteService(Name = "Default")]
 [Route("api/payroll/run/previews")]
 [Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
-public class PayrollPreviewRunController(IPayrollPreviewRunAppService service) : AbpControllerBase
+public class PayrollPreviewRunController : AbpControllerBase
 {
+	private readonly IPayrollPreviewRunAppService _service;
+
+	public PayrollPreviewRunController(IPayrollPreviewRunAppService service)
+	{
+		_service = service;
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ControllerActivated);
+	}
+
 	[HttpPost]
 	public async Task<IActionResult> StartAsync([FromBody] StartPayrollPreviewRequest request)
 	{
-		var run = await service.StartAsync(request);
+		var run = await _service.StartAsync(request);
 		return Accepted($"/api/payroll/run/previews/{run.Id}", run);
 	}
 	[HttpGet("current")]
 	public async Task<PayrollPreviewLookupDto> GetCurrentAsync([FromQuery] PayrollPreviewMonthInput input)
 	{
 		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionStarted);
-		try { return await service.GetCurrentAsync(input); }
+		try { return await _service.GetCurrentAsync(input); }
 		finally { PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionCompleted); }
 	}
 
@@ -33,12 +41,12 @@ public class PayrollPreviewRunController(IPayrollPreviewRunAppService service) :
 	public async Task<RunPayrollResponse> GetRegisterAsync([FromQuery] PayrollRegisterInput input)
 	{
 		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionStarted);
-		try { return await service.GetRegisterAsync(input); }
+		try { return await _service.GetRegisterAsync(input); }
 		finally { PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionCompleted); }
 	}
 
 	[HttpGet("{id:guid}")]
-	public Task<PayrollPreviewStatusDto> GetAsync(Guid id) => service.GetAsync(id);
+	public Task<PayrollPreviewStatusDto> GetAsync(Guid id) => _service.GetAsync(id);
 	[HttpGet("{id:guid}/employees")]
-	public Task<RunPayrollResponse> GetEmployeesAsync(Guid id, [FromQuery] PayrollPreviewPageInput input) => service.GetEmployeesAsync(id, input);
+	public Task<RunPayrollResponse> GetEmployeesAsync(Guid id, [FromQuery] PayrollPreviewPageInput input) => _service.GetEmployeesAsync(id, input);
 }

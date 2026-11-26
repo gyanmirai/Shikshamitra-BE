@@ -23,6 +23,27 @@ namespace ShikshaMitra.Communication;
 public partial class NotificationSelfApi_Tests
 {
 	[Fact]
+	public async Task Action_priority_uses_the_linked_campaign_and_survives_marking_it_read()
+	{
+		var owner = await CreatePersonalUserAsync();
+		var required = await SeedInboxAsync(owner, requiresAcknowledgement: true);
+		var ordinary = await SeedInboxAsync(owner);
+		using var client = CreateClientAs(owner);
+		using var read = await client.PostAsync($"{Route}/inbox/{required}/read", null);
+		read.EnsureSuccessStatusCode();
+		var ordered = (await client.GetFromJsonAsync<JsonElement>($"{Route}/inbox?prioritizeActions=true"))
+			.GetProperty("items").EnumerateArray().ToArray();
+		ordered.Select(row => row.GetProperty("id").GetGuid()).ShouldBe(new[] { required, ordinary });
+		ordered[0].GetProperty("requiresAcknowledgement").GetBoolean().ShouldBeTrue();
+		ordered[1].GetProperty("requiresAcknowledgement").GetBoolean().ShouldBeFalse();
+		using var acknowledgment = await client.PostAsync($"{Route}/inbox/{required}/acknowledge", null);
+		acknowledgment.EnsureSuccessStatusCode();
+		var after = (await client.GetFromJsonAsync<JsonElement>($"{Route}/inbox?prioritizeActions=true"))
+			.GetProperty("items").EnumerateArray().ToArray();
+		after[0].GetProperty("id").GetGuid().ShouldBe(ordinary);
+	}
+
+	[Fact]
 	public async Task Pending_guardian_review_suspends_existing_child_inbox_access_until_the_review_is_resolved()
 	{
 		var owner = await CreatePersonalUserAsync(); var studentId = await SeedLinkedStudentAsync(owner, "guardian", "mother");
@@ -118,7 +139,8 @@ public partial class NotificationSelfApi_Tests
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await denied.Content.ReadAsStringAsync());
 	}
 
-	private async Task<Guid> SeedInboxAsync(Guid owner, string kind = "Requester", Guid? studentId = null)
+	private async Task<Guid> SeedInboxAsync(Guid owner, string kind = "Requester", Guid? studentId = null,
+		bool requiresAcknowledgement = false)
 	{
 		using var scope = Factory.Services.CreateScope(); var services = scope.ServiceProvider;
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -138,6 +160,12 @@ public partial class NotificationSelfApi_Tests
 			DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "[]", "[]");
 		var dispatch = new NotificationDispatch(Guid.NewGuid(), tenantId, intent.Id, revision.Id, "{}", "user", CommunicationChannelType.InApp,
 			logical, "protected-fixture", logical, logical, DateTimeOffset.UtcNow);
+		if (requiresAcknowledgement)
+		{
+			var campaign = new CommunicationCampaign(Guid.NewGuid(), tenantId) { RequiresAcknowledgement = true };
+			db.Add(campaign);
+			dispatch.BindPlanningEvidence(campaign.Id, Guid.NewGuid(), null);
+		}
 		db.Entry(dispatch).Property(x => x.Status).CurrentValue = NotificationDispatchState.Delivered;
 		var item = new NotificationInboxItem(Guid.NewGuid(), tenantId, owner, dispatch.Id, sourceType, sourceId,
 			studentId.HasValue ? $"student:{studentId:N}" : "user", logical, "Private update", "Owned content", "/academic/notification", studentId);

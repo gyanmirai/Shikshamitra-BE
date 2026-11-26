@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.AttendanceImports;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 
@@ -11,11 +12,12 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 
 public class AttendanceImportPreviewRowEnricher(
 	IEmployeeRepository employeeRepository,
+	AttendanceImportScopeReader scopeReader,
 	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ITransientDependency
 {
-	internal async Task EnrichAsync(List<AttendanceImportPreviewRow> rows)
+	internal async Task EnrichAsync(List<AttendanceImportPreviewRow> rows, UserScopeContext scope)
 	{
 		var employeeCodes = rows
 			.Where(x => x.Errors.Count == 0 && !string.IsNullOrWhiteSpace(x.EmployeeCode))
@@ -24,10 +26,17 @@ public class AttendanceImportPreviewRowEnricher(
 			.ToList();
 
 		var employeesByCode = await employeeRepository.GetEmployeesByCodesAsync(employeeCodes);
+		var targets = await scopeReader.ResolveAsync(scope, rows
+			.Where(x => x.Errors.Count == 0 && x.AttendanceDateValue.HasValue)
+			.Select(x => (Employee: employeesByCode.GetValueOrDefault(x.EmployeeCode.ToUpperInvariant()), Date: x.AttendanceDateValue!.Value))
+			.Where(x => x.Employee != null)
+			.Select(x => (x.Employee!.Id, x.Date)).Distinct().ToList());
 		var matchedRows = new List<(AttendanceImportPreviewRow Row, Employee Employee)>();
 		foreach (var row in rows.Where(x => x.Errors.Count == 0))
 		{
-			if (!employeesByCode.TryGetValue(row.EmployeeCode.ToUpperInvariant(), out var employee))
+			if (!employeesByCode.TryGetValue(row.EmployeeCode.ToUpperInvariant(), out var employee)
+				|| !row.AttendanceDateValue.HasValue
+				|| !targets.TryGetValue((employee.Id, row.AttendanceDateValue.Value), out var target))
 			{
 				row.Errors.Add("Staff Code was not found.");
 				continue;
@@ -44,7 +53,7 @@ public class AttendanceImportPreviewRowEnricher(
 			}
 
 			row.EmployeeId = employee.Id;
-			row.EducationMediumStageId = null;
+			row.Action = target.Exists ? "replace" : "create";
 			AddNameMismatchWarning(row, employee);
 			matchedRows.Add((row, employee));
 		}

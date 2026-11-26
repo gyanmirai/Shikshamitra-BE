@@ -19,7 +19,7 @@ internal sealed record PayrollRunItemPreview(
 	PayrollComputationResult Computation,
 	decimal? NetPayDelta,
 	decimal? NetPayDeltaPercent,
-	bool HasAttendanceOrPaidLeave)
+	bool HasAttendanceEvidence)
 {
 	public static PayrollRunItemPreview Prepare(
 		List<EmployeeAttendance> attendanceRecords,
@@ -82,7 +82,7 @@ internal sealed record PayrollRunItemPreview(
 		var netPayDeltaPercent = previousMonthNetPay.HasValue && previousMonthNetPay.Value != 0
 			? netPayDelta / previousMonthNetPay.Value * 100m
 			: (decimal?) null;
-		var hasAttendanceOrPaidLeave = PayrollIssueCodeBuilder.HasAttendanceOrPaidLeave(
+		var hasAttendanceEvidence = PayrollIssueCodeBuilder.HasAttendanceEvidence(
 			attendanceRecords,
 			leaveUnitsByDate,
 			employmentStartDate,
@@ -94,7 +94,7 @@ internal sealed record PayrollRunItemPreview(
 			computation,
 			netPayDelta,
 			netPayDeltaPercent,
-			hasAttendanceOrPaidLeave);
+			hasAttendanceEvidence);
 	}
 
 	private static EmployeePayrollComponent? BuildOvertimeComponent(

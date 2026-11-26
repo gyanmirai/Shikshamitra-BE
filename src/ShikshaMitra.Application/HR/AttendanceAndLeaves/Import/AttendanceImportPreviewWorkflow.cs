@@ -15,12 +15,13 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 public class AttendanceImportPreviewWorkflow(
 	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
 	AttendanceImportPreviewRowEnricher rowEnricher,
-	AttendanceImportPreviewRowClassifier rowClassifier,
+	AttendanceImportScopeReader scopeReader,
 	AttendanceImportBatchRecorder batchRecorder)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AttendanceImportPreviewResponseDto> PreviewAsync(string fileName, string? contentType, byte[] fileContent)
 	{
+		var scope = await scopeReader.GetScopeAsync();
 		AttendanceImportFileParser.ValidateUpload(fileName, fileContent);
 
 		var rawRows = AttendanceImportFileParser.ParseFile(fileName, fileContent);
@@ -28,10 +29,9 @@ public class AttendanceImportPreviewWorkflow(
 		AttendanceImportPreviewMapper.EnsureSinglePayrollMonth(previewRows);
 
 		AttendanceImportPreviewMapper.MarkDuplicateRows(previewRows);
-		await rowEnricher.EnrichAsync(previewRows);
+		await rowEnricher.EnrichAsync(previewRows, scope);
 
 		var validRows = previewRows.Where(x => x.Errors.Count == 0).ToList();
-		await rowClassifier.ClassifyAsync(validRows);
 
 		foreach (var invalidRow in previewRows.Where(x => x.Errors.Count > 0))
 		{
@@ -108,7 +108,6 @@ public class AttendanceImportPreviewWorkflow(
 				Rows = validRows.Select(x => new AttendanceImportPreviewCacheRow
 				{
 					EmployeeId = x.EmployeeId,
-					EducationMediumStageId = x.EducationMediumStageId,
 					AttendanceDate = x.AttendanceDateValue!.Value,
 					TimeIn = x.TimeInValue,
 					TimeOut = x.TimeOutValue,

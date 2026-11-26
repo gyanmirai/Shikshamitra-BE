@@ -17,7 +17,7 @@ internal static class PayrollIssueCodeBuilder
 		decimal netPay,
 		decimal? previousMonthNetPay,
 		decimal? netPayDeltaPercent,
-		bool hasAttendanceOrPaidLeave)
+		bool hasAttendanceEvidence)
 	{
 		var issues = new List<string>();
 
@@ -31,7 +31,7 @@ internal static class PayrollIssueCodeBuilder
 			issues.Add(IssueCodes.NoWorkingDays);
 		}
 
-		if (basisDays > 0 && !hasAttendanceOrPaidLeave)
+		if (basisDays > 0 && !hasAttendanceEvidence)
 		{
 			issues.Add(IssueCodes.NoAttendance);
 		}
@@ -57,7 +57,7 @@ internal static class PayrollIssueCodeBuilder
 		return issues;
 	}
 
-	public static bool HasAttendanceOrPaidLeave(
+	public static bool HasAttendanceEvidence(
 		IReadOnlyList<EmployeeAttendance> attendanceRecords,
 		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
 		DateOnly? employmentStartDate,
@@ -78,6 +78,6 @@ internal static class PayrollIssueCodeBuilder
 		return leaveUnitsByDate?.Any(x =>
 			x.Key >= startDate &&
 			x.Key <= endDate &&
-			x.Value.PaidUnits > 0m) == true;
+			(x.Value.PaidUnits > 0m || x.Value.UnpaidUnits > 0m)) == true;
 	}
 }

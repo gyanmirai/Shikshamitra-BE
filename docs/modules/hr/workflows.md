@@ -82,7 +82,8 @@ Eligible components with zero earned wages produce zero employee and employer PF
 Update the affected salary structure to match its assigned PF rule, then run a fresh preview and review before locking or finalizing.
 The same blocker applies to correction approval.
 
-New preview runs store calculation version `1` in `ExtraProperties`; an absent version is `0`.
+New preview runs store calculation version `3` in `ExtraProperties`, and an absent version is `0`.
+Version `3` counts approved unpaid leave as attendance evidence while preserving its zero payable units.
 Obsolete queued/running previews are superseded, and old completed previews cannot be reused, reviewed, or locked as current payroll.
 A replacement preview requires review of the new generation.
 This uses existing storage and does not require a schema migration.

@@ -114,7 +114,7 @@ internal static class PayrollRunItemBuilder
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double) preview.NetPayDeltaPercent.Value : null,
 			IssueCodes = issueCodes
 				.Concat(preview.Computation.StatutoryIssueCodes)
-				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
+				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceEvidence))
 				.Distinct()
 				.ToList(),
 			PresentDays = preview.AttendanceSummary.PresentDays,
@@ -232,7 +232,7 @@ internal static class PayrollRunItemBuilder
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double) preview.NetPayDeltaPercent.Value : null,
 			IssueCodes = resolvedIssueCodes
 				.Concat(preview.Computation.StatutoryIssueCodes)
-				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
+				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceEvidence))
 				.Distinct()
 				.ToList(),
 			PresentDays = preview.AttendanceSummary.PresentDays,

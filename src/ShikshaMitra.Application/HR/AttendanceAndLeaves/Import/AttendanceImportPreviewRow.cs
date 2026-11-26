@@ -21,7 +21,6 @@ internal sealed class AttendanceImportPreviewRow
 	public EmployeeAttendanceStatusType StatusValue { get; set; }
 	public string? Remarks { get; set; }
 	public Guid EmployeeId { get; set; }
-	public Guid? EducationMediumStageId { get; set; }
 	public List<string> Errors { get; } = [];
 	public List<string> Warnings { get; } = [];
 }

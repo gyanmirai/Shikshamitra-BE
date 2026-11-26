@@ -5,20 +5,20 @@ using System.Text;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using ShikshaMitra.Common;
-using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Users;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
-using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -36,12 +36,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private readonly IAttendanceImportAppService _attendanceImportAppService;
-	private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IRepository<EmployeeWorkShift, Guid> _shiftRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
 	private readonly IRepository<PayrollPolicy, Guid> _payrollPolicyRepository;
@@ -61,12 +60,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public AttendanceImportAppService_Tests()
 	{
 		_attendanceImportAppService = GetRequiredService<IAttendanceImportAppService>();
-		_employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
 		_employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
 		_employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_shiftRepository = GetRequiredService<IRepository<EmployeeWorkShift, Guid>>();
 		_academicYearRepository = GetRequiredService<IRepository<AcademicYear, Guid>>();
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
 		_payrollPolicyRepository = GetRequiredService<IRepository<PayrollPolicy, Guid>>();
@@ -841,14 +839,8 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	[Fact]
 	public async Task Should_Return_Row_Error_When_Employee_Has_No_Shift_For_Worked_Time_Evaluation()
 	{
-		var employee = await CreateEmployeeAsync("noshift");
+		var employee = await CreateEmployeeAsync("noshift", assignShift: false);
 		var attendanceDate = await GetCoveredAttendanceDateAsync();
-		await WithUnitOfWorkAsync(async () =>
-		{
-			var entity = await _employeeRepository.GetAsync(employee.Id);
-			entity.ShiftId = null;
-			await _employeeRepository.UpdateAsync(entity, autoSave: true);
-		});
 		var csv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
 			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},09:00 AM,05:00 PM,,Missing shift,{employee.FullName},{employee.MobileNo}");
@@ -857,39 +849,61 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 
 		preview.CanConfirm.ShouldBeFalse();
 		preview.Summary.InvalidRows.ShouldBe(1);
-		preview.Rows.Single().Errors.ShouldContain(x => x.Contains("Employee shift is required", StringComparison.OrdinalIgnoreCase));
+		preview.Rows.Single().Errors.ShouldContain("No employee work shift is assigned for this date.");
 	}
 
-	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix, Guid? shiftIdOverride = null)
-	{
-		var roleId = await EnsureRoleExistsAsync();
-		var shiftId = shiftIdOverride ?? await EnsureShiftExistsAsync();
-		var academicYear = await EnsurePolicyBaselineAsync();
-		var organizationId = await EnsurePolicyBaselineStageAsync(academicYear.Id);
-		var unique = Guid.NewGuid().ToString("N")[..6];
-
-		var employee = await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
+	private Task<(Guid Id, string EmployeeCode, string FullName, string MobileNo)> CreateEmployeeAsync(
+		string suffix, Guid? shiftIdOverride = null, bool assignShift = true) =>
+		WithUnitOfWorkAsync(async () =>
 		{
-			FirstName = $"Emp{suffix}{unique}",
-			LastName = "Import",
-			MobileNo = BuildPhoneNumber(),
-			Email = BuildEmail(suffix),
-			PanNo = UniquePan(),
-			AdharNo = UniqueAdhar(),
-			DateOfBirth = new DateOnly(1990, 5, 15),
-			GenderType = GenderType.Male,
-			CastType = CastType.General,
-			FamilyCaste = "General",
-			DateOfJoining = new DateOnly(2024, 1, 1),
-			EmployeeStatusType = EmployeeStatusType.Active,
-			EmployeeGroup = EmployeeGroupType.NonTeaching,
-			RoleId = roleId,
-			ShiftId = shiftId
+			await EnsureImportOperatorAsync();
+			var roleId = await EnsureRoleExistsAsync();
+			var shiftId = assignShift ? shiftIdOverride ?? await EnsureShiftExistsAsync() : (Guid?)null;
+			var academicYear = await EnsurePolicyBaselineAsync();
+			var organizationId = await EnsurePolicyBaselineStageAsync(academicYear.Id);
+			var unique = Guid.NewGuid().ToString("N")[..6];
+			var joiningDate = new DateOnly(2024, 1, 1);
+			var mobileNo = BuildPhoneNumber();
+			// The import tests start with active staff and historical work schedules.
+			var employee = new Employee(_guidGenerator.Create(), _currentTenant.Id, userId: null,
+				employeeCode: $"ATT{unique}", basicInfo: new EmployeeBasicInfo(
+					ProfilePictureBlobName: null, LastName: "Import", FirstName: $"Emp{suffix}{unique}", MiddleName: null, ShortName: null,
+					EmployeeStatusType: EmployeeStatusType.Active, DateOfBirth: new DateOnly(1990, 5, 15), FamilyCast: "General",
+					CastType: CastType.General, GenderType: GenderType.Male, Religion: null, MaritalStatus: null, BloodGroup: null,
+					MobileNo: mobileNo, SecondaryMobileNo: null, Email: BuildEmail(suffix), PanNo: UniquePan(), AdharNo: UniqueAdhar(),
+					Address1: null, Address2: null, Address3: null, Department: null, Designation: null, DateOfJoining: joiningDate,
+					EmployeeGroup: EmployeeGroupType.NonTeaching, Qualification: null, RoleId: roleId, IdentificationMark1: null,
+					City: null, State: null, Country: null, PinCode: null, ShiftId: shiftId),
+				bankDetails: null, workExperiences: null);
+			await _employeeRepository.InsertAsync(employee, autoSave: true);
+			await _employeeOrganizationAssignmentRepository.InsertAsync(
+				new EmployeeOrganizationAssignment(_guidGenerator.Create(), _currentTenant.Id, employee.Id, organizationId),
+				autoSave: true);
+			if (shiftId.HasValue)
+			{
+				var shift = await _shiftRepository.GetAsync(shiftId.Value);
+				await GetRequiredService<IRepository<EmployeeShiftAssignment, Guid>>().InsertAsync(
+					new EmployeeShiftAssignment(_guidGenerator.Create(), employee.Id, shift, joiningDate), autoSave: true);
+			}
+			return (employee.Id, employee.EmployeeCode, employee.EmployeeNameWithFather, mobileNo);
 		});
-		await _employeeOrganizationAssignmentRepository.InsertAsync(
-			new EmployeeOrganizationAssignment(Guid.NewGuid(), _currentTenant.Id, employee.Id, organizationId),
-			autoSave: true);
-		return employee;
+
+	private async Task EnsureImportOperatorAsync()
+	{
+		var userId = GetRequiredService<ICurrentUser>().GetId();
+		var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		if (await users.FindAsync(userId) == null)
+		{
+			await users.InsertAsync(new IdentityUser(userId, "attendance-import-operator",
+				"attendance-import-operator@example.invalid", _currentTenant.Id), autoSave: true);
+		}
+
+		var scopes = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		if (!await scopes.AnyAsync(x => x.UserId == userId))
+		{
+			await scopes.InsertAsync(new UserScopeAssignment(_guidGenerator.Create(), _currentTenant.Id,
+				userId: userId, description: "Attendance import fixture school-wide scope"), autoSave: true);
+		}
 	}
 
 	private async Task<Guid> EnsurePolicyBaselineStageAsync(Guid academicYearId)
@@ -941,68 +955,32 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			"AttendanceImportRole");
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
-		if (existing != null)
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureShiftExistsAsync("Attendance Import Test Shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
+
+	private Task<Guid> EnsureFullDayShiftExistsAsync() =>
+		EnsureShiftExistsAsync("Attendance Import Full Day Test Shift", new TimeOnly(7, 0), new TimeOnly(17, 30));
+
+	private Task<Guid> EnsureEightToFiveShiftExistsAsync() =>
+		EnsureShiftExistsAsync("Attendance Import Eight To Five Test Shift", new TimeOnly(8, 0), new TimeOnly(17, 30));
+
+	private Task<Guid> EnsureShiftExistsAsync(string name, TimeOnly start, TimeOnly end) =>
+		WithUnitOfWorkAsync(async () =>
 		{
-			return existing.Id;
-		}
+			var existing = await _shiftRepository.FindAsync(x => x.ShiftName == name);
+			if (existing != null)
+			{
+				return existing.Id;
+			}
 
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Attendance Import Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
-
-	private async Task<Guid> EnsureFullDayShiftExistsAsync()
-	{
-		var existing = (await _shiftRepository.GetListAsync())
-			.FirstOrDefault(x => x.ShiftName == "Attendance Import Full Day Test Shift");
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Attendance Import Full Day Test Shift",
-			StartTime = new TimeOnly(7, 0),
-			EndTime = new TimeOnly(17, 30)
-		};
-
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
-
-	private async Task<Guid> EnsureEightToFiveShiftExistsAsync()
-	{
-		var existing = (await _shiftRepository.GetListAsync())
-			.FirstOrDefault(x => x.ShiftName == "Attendance Import Eight To Five Test Shift");
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Attendance Import Eight To Five Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(17, 30)
-		};
-
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+			var shift = new EmployeeWorkShift(_guidGenerator.Create(), _currentTenant.Id, name, start, end);
+			await _shiftRepository.InsertAsync(shift, autoSave: true);
+			return shift.Id;
+		});
 
 	private async Task<DateOnly> GetCoveredAttendanceDateAsync(int monthOffset = 0)
 	{
-		var academicYear = await EnsurePolicyBaselineAsync();
+		var academicYear = await WithUnitOfWorkAsync(EnsurePolicyBaselineAsync);
 		return DateOnly.FromDateTime(academicYear.StartDate.AddMonths(monthOffset).AddDays(14));
 	}
 
@@ -1017,9 +995,9 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		double? absentThresholdPercentage = null,
 		AttendanceCaptureMode? captureMode = null)
 	{
-		await EnsurePolicyBaselineAsync();
 		await WithUnitOfWorkAsync(async () =>
 		{
+			await EnsurePolicyBaselineAsync();
 			var policy = (await _attendancePolicyRepository.GetListAsync()).Single(x => x.IsDefault);
 			policy.Update(
 				policy.WorkCalendarPolicyId,

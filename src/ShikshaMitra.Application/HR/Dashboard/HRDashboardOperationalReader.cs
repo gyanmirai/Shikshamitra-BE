@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Setup;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
@@ -19,7 +20,8 @@ public class HRDashboardOperationalReader(
 	HRDashboardScopeService scopeService,
 	HRDashboardOperationalStaffReader staffReader,
 	HRDashboardSecondaryReader secondaryReader,
-	HRDashboardModuleReader moduleReader) : ApplicationService
+	HRDashboardModuleReader moduleReader,
+	HrSetupReadinessAppService setupReadiness) : ApplicationService
 {
 	public async Task<HRDashboardOverviewDto> GetOverviewAsync(HRDashboardOverviewInput input)
 	{
@@ -86,6 +88,9 @@ public class HRDashboardOperationalReader(
 			else result.OnboardingState = await ReadSectionAsync("onboarding", async () =>
 				result.Onboarding = await moduleReader.ReadOnboardingAsync());
 		}
+		if (input.SetupAcademicYearId is Guid yearId)
+			await ReadSectionAsync("setup status", async () =>
+				result.HrSetupReady = await setupReadiness.GetSavedStatusAsync(yearId));
 		return result;
 	}
 

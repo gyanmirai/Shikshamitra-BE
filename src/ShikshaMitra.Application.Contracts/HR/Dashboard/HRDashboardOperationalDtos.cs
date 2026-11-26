@@ -25,6 +25,7 @@ public sealed record HRDashboardReviewFlagDto(HRDashboardReviewFlagCode Code, st
 public class HRDashboardOverviewInput
 {
 	public string? Date { get; set; }
+	public Guid? SetupAcademicYearId { get; set; }
 	public bool? IsTeaching { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
 	public string? Department { get; set; }
@@ -76,6 +77,8 @@ public class HRDashboardOverviewDto
 	public HRDashboardDailyCountsDto? Summary { get; set; }
 	public List<HRDashboardDailyCountsDto>? Trend { get; set; }
 	public HRDashboardPayrollCycleDto? Payroll { get; set; }
+	/// <summary>Current saved school setup result. Null when a check is needed or access is unavailable.</summary>
+	public bool? HrSetupReady { get; set; }
 }
 
 public sealed record HRDashboardOperationalWorkforceDto(int ActiveStaff, int Teaching, int NonTeaching, int JoinedThisMonth);

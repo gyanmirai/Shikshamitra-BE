@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Dashboard;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
@@ -77,6 +78,55 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		var result = await GetAsync(client, school.Year);
 		result.IsReady.ShouldBeTrue(); result.Checks.ShouldAllBe(x => x.State == "ready");
 		result.Checks.ShouldNotContain(x => x.Code == "pf" || x.Code == "esi" || x.Code == "deductions");
+	}
+
+	[Fact]
+	public async Task Dashboard_reuses_a_saved_check_and_config_changes_make_it_due_again()
+	{
+		var school = await SeedAsync(complete: true);
+		using var client = As(school);
+		var url = $"/api/hr/dashboard/overview?setupAcademicYearId={school.Year}";
+		async Task<bool?> ReadSavedAsync(HttpClient caller) =>
+			(await caller.GetFromJsonAsync<HRDashboardOverviewDto>(url))!.HrSetupReady;
+
+		(await ReadSavedAsync(client)).ShouldBeNull();
+		(await GetAsync(client, school.Year)).IsReady.ShouldBeTrue();
+		(await ReadSavedAsync(client)).ShouldBe(true);
+
+		using var dashboardOnly = As(school, "HR.Dashboard.View");
+		(await ReadSavedAsync(dashboardOnly)).ShouldBeNull();
+		using var otherSchool = As(await SeedAsync());
+		(await ReadSavedAsync(otherSchool)).ShouldBeNull();
+
+		Guid checkedRevision = default;
+		await InAsync(school.Tenant, async services =>
+		{
+			var store = services.GetRequiredService<IHrSetupReadinessStore>();
+			checkedRevision = await store.ReadRevisionAsync();
+			(await store.ReadStatusAsync(school.Year, DateTime.UtcNow.AddMonths(2))).ShouldBeNull();
+			var users = services.GetRequiredService<IIdentityUserRepository>();
+			await users.InsertAsync(new IdentityUser(Guid.NewGuid(), "another-user", "another-user@example.test", school.Tenant), true);
+		});
+		(await ReadSavedAsync(client)).ShouldBe(true);
+
+		await InAsync(school.Tenant, async services =>
+		{
+			var templates = services.GetRequiredService<IRepository<SalaryStructureTemplate, Guid>>();
+			var active = (await templates.GetListAsync()).Single();
+			active.Archive();
+			await templates.UpdateAsync(active, true);
+		});
+		(await ReadSavedAsync(client)).ShouldBeNull();
+		(await GetAsync(client, school.Year)).IsReady.ShouldBeFalse();
+		(await ReadSavedAsync(client)).ShouldBe(false);
+
+		await InAsync(school.Tenant, async services =>
+		{
+			var later = DateTime.UtcNow.AddSeconds(1);
+			await services.GetRequiredService<IHrSetupReadinessStore>()
+				.RecordAsync(school.Year, checkedRevision, true, later, later.AddDays(1));
+		});
+		(await ReadSavedAsync(client)).ShouldBe(false);
 	}
 
 	[Fact]

@@ -24217,6 +24217,47 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("HR_ReportTemplates", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Setup.HrSetupConfigurationRevision", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("Revision")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("HR_SetupConfigurationRevisions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Setup.HrSetupReadinessSnapshot", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CheckedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsReady")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("Revision")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ValidUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId", "AcademicYearId");
+
+                    b.ToTable("HR_SetupReadinessSnapshots", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.WorkShifts.EmployeeShiftAssignment", b =>
                 {
                     b.Property<Guid>("Id")

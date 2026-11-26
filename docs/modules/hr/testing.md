@@ -27,6 +27,7 @@ PostgreSQL execution and production collation remain separate environment checks
 ## HR setup readiness
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.
+Set `HR_SETUP_TEST_POSTGRES` to an empty, disposable loopback database named `hr_setup_tests_*` to run the same suite against PostgreSQL.
 The isolated fixture covers missing and usable configuration, tenant/year/identity boundaries, self-service denial, inactive earnings, conflicting defaults, invalid calendar references, employee-group role coverage, and conditional template dependencies.
 Read-only assertions confirm the endpoint does not create employee records, earning components, or ESI configuration.
 PF coverage tests also prove missing coverage blocks completion, either saved coverage decision permits completion, future/cancelled/foreign-tenant records do not satisfy setup, and the school month changes at midnight Asia/Kolkata.

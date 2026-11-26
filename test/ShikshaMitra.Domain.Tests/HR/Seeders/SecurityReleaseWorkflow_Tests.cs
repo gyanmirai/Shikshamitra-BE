@@ -67,14 +67,17 @@ public class SecurityReleaseWorkflow_Tests
 		var extract = workflow.IndexOf("- name: Extract backend release", StringComparison.Ordinal);
 		var publishGate = workflow.IndexOf("- name: Validate Azure publish profile", StringComparison.Ordinal);
 		var migrate = workflow.IndexOf("- name: Run DbMigrator", StringComparison.Ordinal);
+		var drain = workflow.IndexOf("- name: Drain staging worker", StringComparison.Ordinal);
 		var deploy = workflow.IndexOf("- name: Deploy to Azure Web App", StringComparison.Ordinal);
+		var resume = workflow.IndexOf("- name: Resume staging worker", StringComparison.Ordinal);
 		var deployedFiles = workflow.IndexOf("- name: Verify deployed backend files", StringComparison.Ordinal);
 		var startup = workflow.IndexOf("- name: Verify deployed API startup", StringComparison.Ordinal);
 		var routes = workflow.IndexOf("- name: Verify deployed Academic notification routes", StringComparison.Ordinal);
 		Assert.True(startupGate < upload && upload < deployJob && extract < migrate && publishGate < migrate && migrate < deploy,
 			"Validate the build before uploading it, extract and validate the release before migration, and migrate before deployment.");
-		Assert.True(deploy < deployedFiles && deployedFiles < startup && startup < routes,
-			"Verify the deployed files before startup and check the Academic notification routes afterward.");
+		Assert.True(migrate < drain && drain < deploy && deploy < resume && resume < deployedFiles && deployedFiles < startup && startup < routes,
+			"Pause staging around the copy, verify the deployed files before startup and verify the Academic notification routes afterward.");
+		Assert.Contains("if: always() && steps.drain.outcome != 'skipped'", workflow[resume..deployedFiles]);
 	}
 
 	[Fact]

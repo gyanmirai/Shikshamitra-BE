@@ -136,9 +136,17 @@ jobs:
                   cd ./release/migrator
                   dotnet ShikshaMitra.DbMigrator.dll
 
+            - name: Drain staging worker
+              id: drain
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: ./scripts/deployment/Set-StagingAppOffline.ps1 -Mode Enter
+
             # ⭐ Deploy using Publish Profile
             - name: Deploy to Azure Web App
               id: deploy
+              timeout-minutes: 8
               uses: azure/webapps-deploy@v3
               with:
                   app-name: ${{ env.AZURE_WEBAPP_NAME }}
@@ -146,6 +154,13 @@ jobs:
                   package: ./release/host
                   # Kudu's manifest-based copy leaves runtime files from older releases in place.
                   clean: false
+
+            - name: Resume staging worker
+              if: always() && steps.drain.outcome != 'skipped'
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: ./scripts/deployment/Set-StagingAppOffline.ps1 -Mode Exit
 
             - name: Verify deployed backend files
               shell: pwsh

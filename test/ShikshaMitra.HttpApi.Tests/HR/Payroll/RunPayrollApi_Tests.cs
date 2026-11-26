@@ -555,6 +555,33 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 
 	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Should_Review_Approved_Unpaid_Leave_Without_Payable_Attendance()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		const string month = "2026-06";
+		var start = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "PayrollOnlyUnpaidLeave", dateOfJoining: start);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		await AssignSalaryStructureAsync(employee.Id, "PayrollOnlyUnpaidLeave", deductionAmount: 0m, useMasterComponents: false);
+		var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(start);
+		await SeedApprovedLeaveAsync(employee.Id, leavePolicyId, start, LeavePaidType.Unpaid,
+			approvedUnits: 25m, endDate: start.AddDays(29));
+
+		var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+		item.PayableDays.ShouldBe(0);
+		item.GrossSalary.ShouldBe(0);
+		item.IssueCodes.ShouldContain(IssueCodes.LowAttendance);
+		item.IssueCodes.ShouldNotContain(IssueCodes.NoAttendance);
+		using var review = await Client.PostAsJsonAsync(ReviewUrl, new PayrollRunReviewRequest
+		{
+			Month = month, PreviewRunId = LastPreviewId(month), EmployeeIds = [employee.Id]
+		}, JsonOptions);
+		review.StatusCode.ShouldBe(HttpStatusCode.OK, await review.Content.ReadAsStringAsync());
+	}
+
+	[PayrollWorkflowPostgresFact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Reduce_Payable_Days_For_Approved_Unpaid_Leave()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -2573,7 +2600,8 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 		DateTime leaveDate,
 		LeavePaidType paidType,
 		decimal approvedUnits,
-		bool halfDay = false)
+		bool halfDay = false,
+		DateTime? endDate = null)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -2597,7 +2625,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				leaveRule.Id,
 				paidType,
 				new DateTimeOffset(leaveDate.Date),
-				new DateTimeOffset(leaveDate.Date),
+				new DateTimeOffset((endDate ?? leaveDate).Date),
 				"Approved leave for payroll setup regression", halfDay);
 
 			await leaveRepository.InsertAsync(leave, autoSave: false);

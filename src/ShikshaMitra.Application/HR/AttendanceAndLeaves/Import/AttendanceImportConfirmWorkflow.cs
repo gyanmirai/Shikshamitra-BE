@@ -3,6 +3,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.AttendanceImports;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,8 @@ public class AttendanceImportConfirmWorkflow(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
 	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
+	AttendanceImportScopeReader scopeReader,
+	IPayrollInputRevisionStore payrollFence,
 	AttendancePayrollWriteGuard payrollWriteGuard)
 	: ApplicationService
 {
@@ -45,7 +48,14 @@ public class AttendanceImportConfirmWorkflow(
 			throw new BusinessException(HRErrorCodes.AttendanceImportNoValidRows);
 		}
 
-		await payrollWriteGuard.EnsureEditableAsync(cached.Rows.Select(x => (x.EmployeeId, x.AttendanceDate)));
+		var requested = cached.Rows.Select(x => (x.EmployeeId, x.AttendanceDate)).Distinct().ToList();
+		await payrollFence.LockAsync();
+		var scope = await scopeReader.GetScopeAsync();
+		var targets = await scopeReader.ResolveAsync(scope, requested);
+		if (targets.Count != requested.Count)
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+
+		await payrollWriteGuard.EnsureEditableUnderFenceAsync(requested);
 		var employeeIds = cached.Rows.Select(x => x.EmployeeId).Distinct().ToList();
 		var minDate = cached.Rows.Min(x => x.AttendanceDate);
 		var maxDate = cached.Rows.Max(x => x.AttendanceDate);
@@ -74,13 +84,14 @@ public class AttendanceImportConfirmWorkflow(
 			var timeIn = isManualStatus ? null : row.TimeIn;
 			var timeOut = isManualStatus ? null : row.TimeOut;
 			var key = AttendanceImportPreviewMapper.BuildRowKey(row.EmployeeId, row.AttendanceDate);
+			var stageId = targets[(row.EmployeeId, row.AttendanceDate)].StageId;
 			if (existingLookup.TryGetValue(key, out var existing))
 			{
 				existing.TimeIn = timeIn;
 				existing.TimeOut = timeOut;
 				existing.StatusType = row.StatusType;
 				existing.Source = AttendanceRecordSource.CsvImport;
-				existing.EducationMediumStageId = row.EducationMediumStageId;
+				existing.EducationMediumStageId = stageId;
 				existing.Remarks = row.Remarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
 				replacedCount++;
@@ -96,7 +107,7 @@ public class AttendanceImportConfirmWorkflow(
 				TimeOut = timeOut,
 				StatusType = row.StatusType,
 				Source = AttendanceRecordSource.CsvImport,
-				EducationMediumStageId = row.EducationMediumStageId,
+				EducationMediumStageId = stageId,
 				Remarks = row.Remarks
 			}, autoSave: false);
 

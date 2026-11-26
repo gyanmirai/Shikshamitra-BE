@@ -198,6 +198,10 @@ Manual attendance reads require `HR.AttendanceAndLeave.MarkAttendance.View`, sav
 Tenant and user-scope checks remain mandatory in addition to these endpoint permissions.
 Manual attendance saves, CSV confirmation, and automated attendance ingestion return HTTP 409 with `HR:Attendance:020316` if any requested staff member has a locked payroll snapshot or an issued payslip for the attendance month.
 Confirming a CSV preview rechecks this protection even if the preview was created before payroll was locked.
+CSV preview and confirm require Biometric Attendance Add and current employee scope.
+Restricted operators can import employees assigned to an accessible stage for the attendance date's academic year.
+Existing attendance assigned to an inaccessible stage is excluded from preview and cannot be overwritten.
+Preview reports out-of-scope codes as unknown, and confirmation rejects the entire batch if a cached target is no longer in scope.
 
 The target leave model uses paid and unpaid rule buckets inside leave policies.
 Do not reintroduce removed leave-type behavior without product approval.
@@ -309,7 +313,8 @@ Locking staff from a pending section batch closes that batch and releases its ou
 HR must have scope for the full pending batch to close it, and can send its remaining eligible rows again.
 Self-finalization requires the school setting and current Add, Submit and Lock permissions.
 Mark Reviewed rejects the entire request with `HR:Payroll:ReviewAttendanceRequired` when any selected preview row has `NO_ATTENDANCE`.
-Record attendance and recalculate before marking the affected rows reviewed.
+For rows with that issue, record the missing attendance and recalculate before marking them reviewed.
+Approved unpaid leave on an eligible working day counts as attendance evidence and contributes zero payable attendance units.
 If evidence changes, the assigned approver's finalization attempt returns the whole batch for fresh review and releases its claims.
 An earlier finalized batch keeps its original payslips.
 Review sheets display Pending finalization, and a new staff claim permanently revokes earlier selection exports.

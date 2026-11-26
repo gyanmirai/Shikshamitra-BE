@@ -9,7 +9,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollPreviewRun : AggregateRoot<Guid>, IMultiTenant
 {
-	public const int CurrentCalculationVersion = 2;
+	public const int CurrentCalculationVersion = 3;
 	public const string CalculationVersionProperty = "CalculationVersion";
 	[NotMapped]
 	public int CalculationVersion => this.GetProperty<int>(CalculationVersionProperty, 0);

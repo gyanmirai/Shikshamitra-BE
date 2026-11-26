@@ -15,9 +15,11 @@ using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -54,9 +56,97 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Csv_Preview_Requires_Employee_Scope()
+	{
+		using var caller = CreateClientAs(Guid.NewGuid());
+		caller.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add);
+		using var csv = BuildCsvUpload("11-04-2026,UNKNOWN,,,FullDayLeave,Scope check,,");
+		using var response = await caller.PostAsync($"{BaseUrl}/preview", csv);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Csv_Import_Excludes_Unassigned_Employees_And_Rejects_Revoked_Assignments()
+	{
+		var allowed = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"CsvScoped{Guid.NewGuid():N}");
+		var denied = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"CsvUnassigned{Guid.NewGuid():N}");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, allowed.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, denied.Id);
+		var callerId = Guid.NewGuid();
+		var date = await SetUpCsvEmployeeScopeAsync(callerId, allowed.Id, denied.Id);
+		using var caller = CreateClientAs(callerId);
+		caller.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+		caller.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add);
+		var allowedRow = $"{date:dd-MM-yyyy},{allowed.EmployeeCode},,,FullDayLeave,Original attendance,,";
+		var deniedRow = $"{date:dd-MM-yyyy},{denied.EmployeeCode},,,FullDayLeave,Out of scope,,";
+		var preview = await PreviewCsvAsync(caller, allowedRow + Environment.NewLine + deniedRow);
+		preview.Summary.ValidRows.ShouldBe(1);
+		preview.Rows[1].Errors.ShouldContain("Staff Code was not found.");
+		using var confirmed = await caller.PostAsJsonAsync($"{BaseUrl}/confirm",
+			new AttendanceImportConfirmRequestDto { PreviewToken = preview.PreviewToken! }, JsonOptions);
+		confirmed.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
+		(await GetAttendanceAsync(allowed.Id, date)).EducationMediumStageId.ShouldBe(Factory.SeededMediumStageId);
+
+		var retry = await PreviewCsvAsync(caller, allowedRow.Replace("Original attendance", "Changed attendance", StringComparison.Ordinal));
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin())
+		{
+			await scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>()
+				.DeleteAsync(x => x.EmployeeId == allowed.Id);
+			await uow.CompleteAsync();
+		}
+
+		using var rejected = await caller.PostAsJsonAsync($"{BaseUrl}/confirm",
+			new AttendanceImportConfirmRequestDto { PreviewToken = retry.PreviewToken! }, JsonOptions);
+		rejected.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await rejected.Content.ReadAsStringAsync());
+		(await GetAttendanceAsync(allowed.Id, date)).Remarks.ShouldBe("Original attendance");
+	}
+
+	private async Task<DateOnly> SetUpCsvEmployeeScopeAsync(Guid callerId, Guid allowed, Guid denied)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin();
+		var academicYear = await services.GetRequiredService<IAcademicYearRepository>().GetAsync(Factory.SeededAcademicYearId);
+		var assignments = services.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		await assignments.DeleteAsync(x => x.EmployeeId == denied, autoSave: true);
+		if (!await assignments.AnyAsync(x => x.EmployeeId == allowed && x.EducationMediumStageId == Factory.SeededMediumStageId))
+		{
+			await assignments.InsertAsync(new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, allowed, Factory.SeededMediumStageId));
+		}
+		await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(
+			new IdentityUser(callerId, $"csv-operator-{callerId:N}", $"{callerId:N}@example.invalid", tenantId));
+		await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+			new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: callerId, educationMediumStageId: Factory.SeededMediumStageId));
+		await uow.CompleteAsync();
+		return DateOnly.FromDateTime(academicYear.StartDate).AddDays(5);
+	}
+
+	private async Task<AttendanceImportPreviewResponseDto> PreviewCsvAsync(HttpClient caller, string rows)
+	{
+		using var upload = BuildCsvUpload(rows);
+		using var response = await caller.PostAsync($"{BaseUrl}/preview", upload);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var preview = await response.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.PreviewToken.ShouldNotBeNullOrWhiteSpace();
+		return preview;
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Preview_Csv_Import()
 	{
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportPreview");
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportPreview", dateOfJoining: new DateTime(2026, 4, 1));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId, new DateOnly(2026, 4, 11));
 		using var content = BuildCsvUpload($"11-04-2026,{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
 
 		var response = await Client.PostAsync($"{BaseUrl}/preview", content);
@@ -64,7 +154,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var body = await response.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
 		body.ShouldNotBeNull();
-		body.CanConfirm.ShouldBeTrue();
+		body.CanConfirm.ShouldBeTrue($"CSV preview errors: {string.Join(", ", body.Rows.SelectMany(x => x.Errors))}");
 		body.PreviewToken.ShouldNotBeNullOrWhiteSpace();
 		body.Rows.Count.ShouldBe(1);
 	}
@@ -246,15 +336,18 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Confirm_Imported_Attendance()
 	{
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportConfirm");
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportConfirm", dateOfJoining: new DateTime(2026, 4, 1));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		using var previewContent = BuildCsvUpload($"11-04-2026,{employee.EmployeeCode},,,FullDayLeave,Approved leave,{employee.FullName},{employee.MobileNo}");
 		var previewResponse = await Client.PostAsync($"{BaseUrl}/preview", previewContent);
 		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var preview = await previewResponse.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.CanConfirm.ShouldBeTrue($"CSV preview errors: {string.Join(", ", preview.Rows.SelectMany(x => x.Errors))}");
 
 		var confirmResponse = await Client.PostAsJsonAsync($"{BaseUrl}/confirm", new AttendanceImportConfirmRequestDto
 		{
-			PreviewToken = preview!.PreviewToken!
+			PreviewToken = preview.PreviewToken!
 		}, JsonOptions);
 
 		confirmResponse.StatusCode.ShouldBe(HttpStatusCode.OK);

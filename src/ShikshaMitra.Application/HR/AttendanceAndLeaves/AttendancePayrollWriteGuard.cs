@@ -15,6 +15,11 @@ public class AttendancePayrollWriteGuard(
 	{
 		// Serialize the check with payroll issuance and the attendance write in this unit of work.
 		await payrollFence.LockAsync();
+		await EnsureEditableUnderFenceAsync(attendance);
+	}
+
+	internal async Task EnsureEditableUnderFenceAsync(IEnumerable<(Guid EmployeeId, DateOnly AttendanceDate)> attendance)
+	{
 		var locks = await lookupReader.BuildLockLookupAsync(attendance);
 		foreach (var (key, state) in locks)
 		{

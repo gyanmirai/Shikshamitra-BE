@@ -74,7 +74,11 @@ public sealed class ApiRequestTimingScope : IDisposable
 			{
 				PayrollReadCheckpoint.RoutingCompleted => "payroll-routing",
 				PayrollReadCheckpoint.AuthenticationCompleted => "payroll-authentication",
-				PayrollReadCheckpoint.ActionStarted => "payroll-authorization",
+				PayrollReadCheckpoint.PermissionCheckStarted => "payroll-policy-resolution",
+				PayrollReadCheckpoint.PermissionIdentityResolved => "payroll-permission-identity",
+				PayrollReadCheckpoint.PermissionProvidersChecked => "payroll-permission-providers",
+				PayrollReadCheckpoint.AuthorizationCompleted => "payroll-authorization-end",
+				PayrollReadCheckpoint.ActionStarted => "payroll-mvc-entry",
 				PayrollReadCheckpoint.ServiceStarted => "payroll-service-entry",
 				PayrollReadCheckpoint.AcademicYearResolved => "payroll-academic-year",
 				PayrollReadCheckpoint.StaffScopeResolved => "payroll-staff-scope",

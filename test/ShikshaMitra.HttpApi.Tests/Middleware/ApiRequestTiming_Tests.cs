@@ -76,6 +76,10 @@ public class ApiRequestTiming_Tests
 				var scope = ApiRequestTimingScope.Current;
 				scope!.RecordPayrollCheckpoint(PayrollReadCheckpoint.RoutingCompleted);
 				scope.RecordPayrollCheckpoint(PayrollReadCheckpoint.AuthenticationCompleted);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionCheckStarted);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionIdentityResolved);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionProvidersChecked);
+				scope.RecordPayrollCheckpoint(PayrollReadCheckpoint.AuthorizationCompleted);
 				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionStarted);
 				await Task.Yield();
 				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ServiceStarted);
@@ -88,7 +92,11 @@ public class ApiRequestTiming_Tests
 			var payrollTiming = string.Join(",", payroll.Headers.GetValues("Server-Timing"));
 			payrollTiming.ShouldContain("payroll-routing;dur=");
 			payrollTiming.ShouldContain("payroll-authentication;dur=");
-			payrollTiming.ShouldContain("payroll-authorization;dur=");
+			payrollTiming.ShouldContain("payroll-policy-resolution;dur=");
+			payrollTiming.ShouldContain("payroll-permission-identity;dur=");
+			payrollTiming.ShouldContain("payroll-permission-providers;dur=");
+			payrollTiming.ShouldContain("payroll-authorization-end;dur=");
+			payrollTiming.ShouldContain("payroll-mvc-entry;dur=");
 			payrollTiming.ShouldContain("payroll-service-entry;dur=");
 			payrollTiming.ShouldContain("payroll-page;dur=");
 			payrollTiming.ShouldContain("payroll-action-exit;dur=");

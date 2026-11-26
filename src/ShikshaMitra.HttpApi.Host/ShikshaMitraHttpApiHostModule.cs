@@ -572,6 +572,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			return next(httpContext);
 		});
 		app.UseAuthorization();
+		app.Use(next => httpContext =>
+		{
+			Diagnostics.ApiRequestTimingScope.Current?.RecordPayrollCheckpoint(
+				HR.Payroll.RunPayroll.PayrollReadCheckpoint.AuthorizationCompleted);
+			return next(httpContext);
+		});
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>
 		{

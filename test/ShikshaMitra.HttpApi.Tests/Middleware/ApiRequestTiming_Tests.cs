@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.Diagnostics;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using Shouldly;
 using Xunit;
 
@@ -25,7 +26,7 @@ public class ApiRequestTiming_Tests
 	[Fact]
 	public async Task Should_Report_Real_Database_Timing_Without_Logging_Request_Or_Sql_Secrets()
 	{
-		var observer = new ApiDatabaseTimingObserver();
+		var observer = new ApiRequestTimingObserver();
 		await observer.StartAsync(CancellationToken.None);
 		try
 		{
@@ -55,6 +56,50 @@ public class ApiRequestTiming_Tests
 			message.ShouldContain("Route=/api/test/{id}");
 			message.ShouldNotContain("private-");
 			message.ShouldNotContain("SELECT");
+		}
+		finally
+		{
+			await observer.StopAsync(CancellationToken.None);
+		}
+	}
+
+	[Fact]
+	public async Task Should_Report_Payroll_Phases_Only_For_Matching_Reads()
+	{
+		var observer = new ApiRequestTimingObserver();
+		await observer.StartAsync(CancellationToken.None);
+		try
+		{
+			var logger = new RecordingLogger();
+			using var server = CreateServer(logger, async context =>
+			{
+				var scope = ApiRequestTimingScope.Current;
+				scope!.RecordPayrollCheckpoint(PayrollReadCheckpoint.RoutingCompleted);
+				scope.RecordPayrollCheckpoint(PayrollReadCheckpoint.AuthenticationCompleted);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionStarted);
+				await Task.Yield();
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ServiceStarted);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PageRead);
+				PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionCompleted);
+				await context.Response.WriteAsync("unchanged response");
+			});
+			using var client = server.CreateClient();
+			using var payroll = await client.GetAsync("/api/payroll/run/register?month=private-value");
+			var payrollTiming = string.Join(",", payroll.Headers.GetValues("Server-Timing"));
+			payrollTiming.ShouldContain("payroll-routing;dur=");
+			payrollTiming.ShouldContain("payroll-authentication;dur=");
+			payrollTiming.ShouldContain("payroll-authorization;dur=");
+			payrollTiming.ShouldContain("payroll-service-entry;dur=");
+			payrollTiming.ShouldContain("payroll-page;dur=");
+			payrollTiming.ShouldContain("payroll-action-exit;dur=");
+			payrollTiming.ShouldContain("payroll-response-headers;dur=");
+			payrollTiming.ShouldNotContain("payroll-count;dur=");
+			payrollTiming.ShouldNotContain("private-value");
+			logger.Messages[0].ShouldContain("PayrollPhases=payroll-routing");
+			logger.Messages[0].ShouldNotContain("private-value");
+
+			using var other = await client.GetAsync("/api/test");
+			string.Join(",", other.Headers.GetValues("Server-Timing")).ShouldNotContain("payroll-");
 		}
 		finally
 		{

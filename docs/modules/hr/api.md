@@ -189,12 +189,15 @@ Attendance and leave APIs feed payroll, so locks and policy resolution matter:
 | Attendance register | `/api/hr/attendance/register*` | `HR.AttendanceAndLeave.AttendanceTracking.*` |
 | Attendance import | `/api/attendance-import/*` | `HR.AttendanceAndLeave.ImportAttendance.*` |
 | Automated attendance runs | `/api/hr/attendance/automated-runs*` | `HR.AttendanceAndLeave.ImportAttendance.*` |
+| Automated attendance ingestion | `POST /api/hr/attendance/integration-runs` | `HR.AttendanceAndLeave.BiometricAttendance.Add` and school-wide HR scope |
+| Attendance evaluations | `/api/hr/attendance/evaluations*` | `HR.AttendanceAndLeave.Evaluations.*` |
 | Leave policies | `/api/leave-policies`, `/api/hr-leave-types` | `HR.AttendanceAndLeave.Setting.LeavePolicy.*` |
 | Leave management | `/api/leave-management*` | `HR.AttendanceAndLeave.LeaveManagement.*` |
 
 Manual attendance reads require `HR.AttendanceAndLeave.MarkAttendance.View`, saves require `.Add`, and day lock or unlock requires `.Delete`.
 Tenant and user-scope checks remain mandatory in addition to these endpoint permissions.
-| Attendance evaluations | `/api/hr/attendance/evaluations*` | `HR.AttendanceAndLeave.Evaluations.*` |
+Manual attendance saves, CSV confirmation, and automated attendance ingestion return HTTP 409 with `HR:Attendance:020316` if any requested staff member has a locked payroll snapshot or an issued payslip for the attendance month.
+Confirming a CSV preview rechecks this protection even if the preview was created before payroll was locked.
 
 The target leave model uses paid and unpaid rule buckets inside leave policies.
 Do not reintroduce removed leave-type behavior without product approval.

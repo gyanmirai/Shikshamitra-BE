@@ -64,6 +64,7 @@ public static partial class HRErrorCodes
 	public const string AttendancePolicyEvaluationInvalidPunches = "HR:Attendance:020313";
 	public const string TakeAttendanceHolidayNotAllowed = "HR:Attendance:020314";
 	public const string TakeAttendanceApprovedLeaveMutationNotAllowed = "HR:Attendance:020315";
+	public const string AttendancePayrollLocked = "HR:Attendance:020316";
 	public const string LeaveFileTooLarge = "HR:Leave:020101";
 	public const string LeaveFileEmpty = "HR:Leave:020102";
 	public const string LeaveFileInvalidExtension = "HR:Leave:020103";

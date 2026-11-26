@@ -6,6 +6,10 @@ public enum PayrollReadCheckpoint
 {
 	RoutingCompleted,
 	AuthenticationCompleted,
+	PermissionCheckStarted,
+	PermissionIdentityResolved,
+	PermissionProvidersChecked,
+	AuthorizationCompleted,
 	ActionStarted,
 	ServiceStarted,
 	AcademicYearResolved,

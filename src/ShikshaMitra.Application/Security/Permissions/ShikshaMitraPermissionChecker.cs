@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Linq;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Authorization.Permissions;
@@ -131,10 +133,18 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
-		if (TryGetUserId(claimsPrincipal, out var deniedUser) && !await _admins.IsAdminAsync(deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
+		var payrollRead = name == ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View;
+		if (payrollRead) PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionCheckStarted);
+		var denied = TryGetUserId(claimsPrincipal, out var deniedUser) &&
+			!await _admins.IsAdminAsync(deniedUser) &&
+			(await _denies.GetDeniedAsync(deniedUser)).Contains(name);
+		if (payrollRead) PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionIdentityResolved);
+		if (denied) return false;
 		if (IsStudentPermission(name)) return await base.IsGrantedAsync(claimsPrincipal, name);
 
-		if (await base.IsGrantedAsync(claimsPrincipal, name))
+		var granted = await base.IsGrantedAsync(claimsPrincipal, name);
+		if (payrollRead) PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.PermissionProvidersChecked);
+		if (granted)
 		{
 			return true;
 		}

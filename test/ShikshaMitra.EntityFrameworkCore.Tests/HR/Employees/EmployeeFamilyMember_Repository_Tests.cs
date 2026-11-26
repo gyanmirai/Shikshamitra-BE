@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Xunit;
@@ -188,6 +189,9 @@ public class EmployeeFamilyMember_Repository_Tests : ShikshaMitraEntityFramework
 
 			var roleId = _guidGenerator.Create();
 			var role = new IdentityRole(roleId, "TestRole", null);
+			role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+			role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.NonTeaching);
+			role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
 			await _roleRepository.InsertAsync(role, autoSave: true);
 
 			var userId = _guidGenerator.Create();

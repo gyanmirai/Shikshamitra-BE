@@ -18,7 +18,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class EmployeePersonalInfoAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeStatusAppService _employeeStatusAppService;
@@ -27,7 +27,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IdentityUserManager _userManager;
 	private readonly EmployeeManager _employeeManager;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
@@ -41,7 +41,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		_userRepository = GetRequiredService<IIdentityUserRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
 		_employeeManager = GetRequiredService<EmployeeManager>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
@@ -63,9 +63,9 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.EmployeeCode.ShouldNotBeNullOrEmpty();
 		result.UserId.ShouldNotBeNull();
 		result.UserId.Value.ShouldNotBe(Guid.Empty);
-		result.ShiftId.ShouldBe(input.ShiftId);
+		result.ShiftId.ShouldBe(input.InitialWorkShiftAssignment!.WorkShiftId);
 		result.Shift.ShouldNotBeNull();
-		result.Shift!.Id.ShouldBe(input.ShiftId!.Value);
+		result.Shift!.Id.ShouldBe(input.InitialWorkShiftAssignment!.WorkShiftId);
 
 		var linkedUser = await _userRepository.FindAsync(result.UserId.Value);
 		linkedUser.ShouldNotBeNull();
@@ -80,14 +80,14 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 
 		var result = await _personalInfoAppService.GetAsync(created.Id);
 
-		result.ShiftId.ShouldBe(input.ShiftId);
+		result.ShiftId.ShouldBe(input.InitialWorkShiftAssignment!.WorkShiftId);
 		result.Shift.ShouldNotBeNull();
-		result.Shift!.Id.ShouldBe(input.ShiftId!.Value);
+		result.Shift!.Id.ShouldBe(input.InitialWorkShiftAssignment!.WorkShiftId);
 		result.Shift.ShiftName.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	[Fact]
-	public async Task Projection_Should_Resolve_Shift_When_Navigation_Is_Not_Loaded()
+	public async Task Projection_Should_Resolve_Dated_Shift_When_Navigation_Is_Not_Loaded()
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
@@ -129,10 +129,12 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				State: null,
 				Country: null,
 				PinCode: null,
-				ShiftId: shiftId),
+				ShiftId: null),
 			bankDetails: null,
 			workExperiences: []);
 
+		await GetRequiredService<IEmployeeRepository>().InsertAsync(employee, autoSave: true);
+		await SetHistoricalWorkShiftAsync(employee.Id, shiftId, employee.DateOfJoining!.Value);
 		var result = await _personalInfoProjection.ToPersonalInfoDtoAsync(employee);
 
 		result.ShiftId.ShouldBe(shiftId);
@@ -256,7 +258,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			_personalInfoAppService.CreateAsync(input));
 
 		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleNotAllowed);
-		exception.Message.ShouldContain("Employee audience");
+		exception.Message.ShouldContain("Staff audience");
 	}
 
 	[Fact]
@@ -361,7 +363,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			error.MemberNames.Contains(nameof(CreateEmployeePersonalInfoDto.EmployeeGroup)) &&
 			error.ErrorMessage != null &&
 			error.ErrorMessage.Contains(
-				"Employee group is required.",
+				"Staff group is required.",
 				StringComparison.Ordinal));
 	}
 
@@ -380,7 +382,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				dateOfBirth: new DateOnly(1990, 1, 1)));
 
 		exception.Code.ShouldBe(HRErrorCodes.EmployeeGroupRequired);
-		exception.Message.ShouldBe("Employee group is required.");
+		exception.Message.ShouldBe("Staff group is required.");
 	}
 
 	[Fact]
@@ -392,7 +394,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 
 		result.Errors.ShouldContain(error =>
 			error.PropertyName == nameof(CreateEmployeeBasicInfoDto.EmployeeGroup) &&
-			error.ErrorMessage == "Employee group is required.");
+			error.ErrorMessage == "Staff group is required.");
 	}
 
 	[Fact]
@@ -716,22 +718,21 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	public async Task CreateAsync_Should_Reject_Nonexistent_ShiftId()
 	{
 		var input = await BuildCreateDtoAsync($"missing.shift.create.{Guid.NewGuid():N}@test.com");
-		input.ShiftId = Guid.NewGuid();
+		input.InitialWorkShiftAssignment!.WorkShiftId = Guid.NewGuid();
 
 		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
 			await _personalInfoAppService.CreateAsync(input));
 
-		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+		exception.Code.ShouldBe(HRErrorCodes.WorkShiftInvalid);
 	}
 
 	[Fact]
-	public async Task UpdateAsync_Should_Reject_Nonexistent_ShiftId()
+	public async Task UpdateAsync_Should_Preserve_Employee_Work_Shift()
 	{
 		var created = await _personalInfoAppService.CreateAsync(
 			await BuildCreateDtoAsync($"missing.shift.update.{Guid.NewGuid():N}@test.com"));
 
-		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
-			await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
 			{
 				FirstName = created.FirstName,
 				LastName = created.LastName,
@@ -745,14 +746,15 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				EmployeeStatusType = EmployeeStatusType.Active,
 				RoleId = created.RoleId,
 				ShiftId = Guid.NewGuid()
-			}));
+			});
 
-		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+		result.ShiftId.ShouldBe(created.ShiftId);
 	}
 
 	[Fact]
 	public async Task UpdateAsync_Should_Preserve_Existing_Inactive_Status()
 	{
+		await EnsureSchoolWideActorAsync();
 		var created = await _personalInfoAppService.CreateAsync(
 			await BuildCreateDtoAsync($"inactive.update.{Guid.NewGuid():N}@test.com"));
 		await _employeeStatusAppService.ChangeStatusAsync(created.Id, new ChangeEmployeeStatusDto
@@ -804,7 +806,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		};
 	}
 
@@ -852,21 +854,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		return await _roleRepository.InsertAsync(role, autoSave: true);
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null) return existing.Id;
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("EmployeePersonalInfoAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
 	/// <summary>
 	/// Smallest valid PNG: 1x1 transparent pixel.

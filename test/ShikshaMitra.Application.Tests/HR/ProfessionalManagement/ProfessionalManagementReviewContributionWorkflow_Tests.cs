@@ -47,6 +47,7 @@ public class ProfessionalManagementReviewContributionWorkflow_Tests
 		{
 			var result = await WithUnitOfWorkAsync(async () =>
 			{
+				await HrSchoolScopeTestHelper.EnsureCurrentActorAsync(ServiceProvider);
 				var expectedDate = _clock.Now.Date;
 				var observation = await _workflow.AddObservationAsync(
 					scenario.AssignmentId,

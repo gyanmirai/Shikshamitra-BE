@@ -114,6 +114,7 @@ public class ProfessionalManagementWorkflow_Tests
 		{
 			await WithUnitOfWorkAsync(async () =>
 			{
+				await HrSchoolScopeTestHelper.EnsureCurrentActorAsync(ServiceProvider);
 				var exception = await Should.ThrowAsync<BusinessException>(() =>
 					_reviewWorkflow.SaveStageAsync(
 						scenario.AssignmentId,
@@ -155,6 +156,7 @@ public class ProfessionalManagementWorkflow_Tests
 		{
 			await WithUnitOfWorkAsync(async () =>
 			{
+				await HrSchoolScopeTestHelper.EnsureCurrentActorAsync(ServiceProvider);
 				await _contributionWorkflow.AddEvidenceAsync(
 					scenario.AssignmentId,
 					new PerformanceEvidenceRequest

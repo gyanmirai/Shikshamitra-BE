@@ -126,8 +126,10 @@ internal static class IdentityCardSvgRenderer
 	{
 		var bold = IsBold(style);
 		var italic = style.FontStyle == "italic";
-		return SKTypeface.FromFamilyName(style.FontFamily ?? "Arial",
-			italic ? bold ? SKFontStyle.BoldItalic : SKFontStyle.Italic : bold ? SKFontStyle.Bold : SKFontStyle.Normal);
+		var fontStyle = italic
+			? bold ? SKFontStyle.BoldItalic : SKFontStyle.Italic
+			: bold ? SKFontStyle.Bold : SKFontStyle.Normal;
+		return IdentityCardPdfFonts.Resolve(style.FontFamily ?? "Arial", fontStyle, bold);
 	}
 
 	private static string DisplayText(IdentityCardLayoutElement element, string? value)

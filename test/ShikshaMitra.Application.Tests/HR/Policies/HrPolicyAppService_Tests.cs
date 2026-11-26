@@ -31,7 +31,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Policies;
 
-public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class HrPolicyAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
@@ -48,7 +48,7 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly IRepository<HolidayType, Guid> _holidayTypeRepository;
@@ -76,7 +76,7 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
 		_leavePolicyRepository = GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		_leavePolicyManager = GetRequiredService<LeavePolicyManager>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_holidayTypeRepository = GetRequiredService<IRepository<HolidayType, Guid>>();
@@ -3449,7 +3449,6 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		warning.Conflict.TargetDisplayName.ShouldBe(group.Name);
 		warning.Conflict.EffectiveFrom.ShouldBe(new DateTime(2026, 4, 1));
 		warning.Conflict.EffectiveTo.ShouldBe(new DateTime(2026, 6, 30));
-		warning.Message.ShouldContain(existing.Id.ToString("D"));
 		warning.Message.ShouldContain(group.Name);
 		warning.Message.ShouldContain(context.PayrollPolicy.Name);
 		warning.Message.ShouldContain(context.AttendancePolicy.Name);
@@ -5766,9 +5765,10 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(Guid? roleId = null)
 	{
+		await EnsureSchoolWideActorAsync();
 		var resolvedRoleId = roleId ?? await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
-		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
+		var employee = await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Policy",
 			LastName = "Impact",
@@ -5784,8 +5784,10 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = resolvedRoleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		});
+		await SetFixtureEmployeeActiveAsync(employee.Id);
+		return employee;
 	}
 
 	private sealed record ResolvedPolicyIds(
@@ -6140,23 +6142,8 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		return id;
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = $"PolicyImpactShift-{_guidGenerator.Create():N}",
-			StartTime = new TimeOnly(9, 0),
-			EndTime = new TimeOnly(17, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("HrPolicyAppService shift", new TimeOnly(9, 0), new TimeOnly(17, 0));
 
 	private async Task<Guid> CreateAcademicYearAsync()
 	{

@@ -181,7 +181,7 @@ public partial class FeeStructureAppService
 		candidate.RefundPolicyVersionId = refund?.Id;
 		var previousProration = current?.GetExplicitProrationPolicyVersionId();
 		var proration = await Resolve("proration", candidate.ProrationPolicyId, candidate.ProrationPolicyVersionId,
-			previousProration.HasValue ? current!.ProrationPolicyId : null, previousProration, false);
+			previousProration.HasValue ? current!.ProrationPolicyId : null, previousProration, true);
 		candidate.ProrationPolicyVersionId = proration?.Id;
 		foreach (var version in new[] { collection, concession, refund, proration }.Where(x => x != null))
 			result.PolicyLabels[version!.PolicyType] = $"{version.PolicyName} · v{version.VersionNumber}";

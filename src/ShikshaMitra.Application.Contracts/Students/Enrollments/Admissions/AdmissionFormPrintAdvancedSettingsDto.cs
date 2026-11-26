@@ -82,6 +82,7 @@ public sealed class AdmissionPrintHeaderSettingsDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Continuation { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? SchoolName { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Address { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? AddressLayout { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Phone { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Email { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Website { get; set; }

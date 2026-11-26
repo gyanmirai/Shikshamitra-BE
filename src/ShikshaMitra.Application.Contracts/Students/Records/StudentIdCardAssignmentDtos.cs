@@ -25,6 +25,7 @@ public class StudentIdCardAssignmentPageQueryDto : PagedResultRequestDto
 public class StudentIdCardAssignmentRosterQueryDto : StudentIdCardAssignmentPageQueryDto
 {
 	public Guid? DivisionId { get; set; }
+	public List<StudentDirectoryColumnFilterDto> ColumnFilters { get; set; } = [];
 }
 
 public class StudentIdCardAssignmentDto
@@ -50,7 +51,9 @@ public class StudentIdCardAssignmentRosterStudentDto
 	public Guid StudentId { get; set; }
 	public string StudentName { get; set; } = "";
 	public string? GrNumber { get; set; }
+	public int? RollNumber { get; set; }
 	public string? DivisionName { get; set; }
+	public bool HasPhoto { get; set; }
 	public bool HasValidIssuedCard { get; set; }
 }
 

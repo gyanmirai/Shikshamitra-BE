@@ -34,7 +34,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		return await PreviewCoreAsync(input);
 	}
 
-	private async Task<List<StudentIdCardDto>> PreviewCoreAsync(StudentIdCardPreviewRequestDto input, StudentIdCardTemplateDto? template = null)
+	private async Task<List<StudentIdCardDto>> PreviewCoreAsync(StudentIdCardPreviewRequestDto input, StudentIdCardTemplateDto? template = null, bool fitStudentName = false)
 	{
 		var result = new List<StudentIdCardDto>();
 		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
@@ -42,7 +42,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
 			template ??= await LoadTemplateAsync(input.TemplateId);
-			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots, fitStudentName);
 			result.Add(new() { StudentId = studentId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.Fields.GetValueOrDefault("_PhotoBlobName")), StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen });
 		}
 		return await RedactCardSignaturesAsync(result);
@@ -88,7 +88,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 				sequence = numbers.Select(n => int.TryParse(n[prefix.Length..], out var parsed) ? parsed : 0).DefaultIfEmpty().Max();
 			}
 			sequences[prefix] = ++sequence;
-			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots, fitStudentName: assignmentFingerprint != null);
 			if (assignmentFingerprint != null) snapshot.Fields[AssignmentFingerprintField] = assignmentFingerprint;
 			var card = new StudentIdCard(GuidGenerator.Create(), CurrentTenant.Id!.Value, studentId, $"{prefix}{sequence:000000}", key,
 				JsonSerializer.Serialize(snapshot.Fields, JsonOptions), JsonSerializer.Serialize(frozen, JsonOptions), Clock.Now, CurrentUser.Id!.Value, snapshot.AcademicYearId);

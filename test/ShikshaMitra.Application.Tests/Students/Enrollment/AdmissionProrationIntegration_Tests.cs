@@ -158,7 +158,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
-	public Task Proration_policy_applies_only_on_or_after_school_academic_year_start() => RunCertificationScenarioAsync(async () =>
+	public Task Proration_policy_applies_only_after_school_academic_year_start() => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CreateCollectibleAdmissionAsync("ProrationSchoolCutoff", amount: 12000m, oneTime: false);
 		var year = await ReadAsync<AcademicYear>(fixture.YearId);
@@ -178,7 +178,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 		var cutoffPreview = await joining.PreviewAsync(fixture.Application.Id, new()
 		{ JoiningDate = year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
-		cutoffPreview.ProrationPolicy.ShouldNotBeNull().PolicyVersionId.ShouldBe(versionId);
+		cutoffPreview.ProrationPolicy.ShouldBeNull();
+		cutoffPreview.Proration.ShouldBeNull();
+		cutoffPreview.TotalAmount.ShouldBe(cutoffPreview.ScheduledAmount);
+		await Should.ThrowAsync<BusinessException>(() => joining.PreviewAsync(fixture.Application.Id, new()
+		{ JoiningDate = year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), ProrationPolicyVersionId = versionId }));
 
 		var afterCutoff = year.StartDate.AddDays(1);
 		var afterPreview = await joining.PreviewAsync(fixture.Application.Id, new()

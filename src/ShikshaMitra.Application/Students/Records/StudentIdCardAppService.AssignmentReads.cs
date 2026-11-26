@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
@@ -60,41 +61,60 @@ public partial class StudentIdCardAppService
 	{
 		await EnsureTemplateActorAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View);
 		ValidateAssignmentPage(input);
+		StudentIdCardAssignmentRosterFilters.Validate(input.ColumnFilters);
 		await EnsureAssignmentClassAsync(academicYearId, standardId, divisionId: input.DivisionId);
 		var population = await GetAssignmentStudentPopulationAsync(academicYearId, standardId);
-		if (input.DivisionId.HasValue) population = population.Where(student => student.DivisionId == input.DivisionId);
+		if (input.DivisionId.HasValue) population = population.Where(placement => placement.Student.DivisionId == input.DivisionId);
 		var validCards = await GetValidAssignmentCardsAsync(academicYearId);
-		var query = population.Select(student => new StudentIdCardAssignmentRosterStudentDto
+		var query = population.Select(placement => new StudentIdCardAssignmentRosterStudentDto
 		{
-			StudentId = student.Id,
-			StudentName = ((student.FirstName ?? "") + (student.MiddleName != null && student.MiddleName != "" ? " " + student.MiddleName : "") +
-				(student.LastName != null && student.LastName != "" ? " " + student.LastName : "")).Trim(),
-			GrNumber = student.GrNumber ?? (student.GrNo.HasValue ? student.GrNo.Value.ToString() : null),
-			DivisionName = student.Division != null ? student.Division.Name : null,
-			HasValidIssuedCard = validCards.Any(card => card.StudentId == student.Id)
+			StudentId = placement.Student.Id,
+			StudentName = ((placement.Student.FirstName ?? "") +
+				(placement.Student.MiddleName != null && placement.Student.MiddleName != "" ? " " + placement.Student.MiddleName : "") +
+				(placement.Student.LastName != null && placement.Student.LastName != "" ? " " + placement.Student.LastName : "")).Trim(),
+			GrNumber = placement.Student.GrNumber ?? (placement.Student.GrNo.HasValue ? placement.Student.GrNo.Value.ToString() : null),
+			RollNumber = placement.RollNumber,
+			DivisionName = placement.Student.Division != null ? placement.Student.Division.Name : null,
+			HasPhoto = !string.IsNullOrWhiteSpace(placement.Student.PhotoBlobName),
+			HasValidIssuedCard = validCards.Any(card => card.StudentId == placement.Student.Id)
 		});
 		var search = input.Search?.Trim().ToLowerInvariant();
 		if (!string.IsNullOrEmpty(search))
+		{
+			var searchByRoll = int.TryParse(search, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rollNumber);
 			query = query.Where(student => student.StudentName.ToLower().Contains(search) ||
-				student.GrNumber != null && student.GrNumber.ToLower().Contains(search));
+				student.GrNumber != null && student.GrNumber.ToLower().Contains(search) ||
+				searchByRoll && student.RollNumber == rollNumber);
+		}
+		query = StudentIdCardAssignmentRosterFilters.Apply(query, input.ColumnFilters);
 		var total = await AsyncExecuter.CountAsync(query);
 		var students = await AsyncExecuter.ToListAsync(query.OrderBy(student => student.StudentName)
 			.ThenBy(student => student.StudentId).Skip(input.SkipCount).Take(input.MaxResultCount));
 		return new(total, students);
 	}
 
-	private async Task<IQueryable<Student>> GetAssignmentStudentPopulationAsync(Guid year, Guid standard)
+	private async Task<IQueryable<AssignmentStudentPlacement>> GetAssignmentStudentPopulationAsync(Guid year, Guid standard)
 	{
 		var scope = LazyServiceProvider.LazyGetRequiredService<StudentRecordsEnrollmentScopeService>();
 		var students = LazyServiceProvider.LazyGetRequiredService<IStudentRepository>();
 		var population = await scope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
 		var policy = (await policies.ResolveAsync(year)).Policy;
-		if (policy.IsMasked("Identity", await access.GetDatabaseRoleNamesAsync())) return population.Where(_ => false);
+		if (policy.IsMasked("Identity", await access.GetDatabaseRoleNamesAsync()))
+			return population.Where(_ => false).Select(student => new AssignmentStudentPlacement { Student = student });
 		var enrollment = await scope.GetQueryableAsync();
 		population = population.Where(student => student.AcademicYearId == year && student.StandardId == standard &&
-			student.Status == StudentLifeCycleStatusEnum.Enrolled && enrollment.Any(row => row.StudentId == student.Id &&
-				row.AcademicYearId == year && row.StandardId == standard && row.DivisionId == student.DivisionId && row.IsActive));
-		return await access.FilterFullAccessStudentsAsync(population, policy);
+			student.Status == StudentLifeCycleStatusEnum.Enrolled);
+		population = await access.FilterFullAccessStudentsAsync(population, policy);
+		return from student in population
+			from row in enrollment.Where(row => row.StudentId == student.Id && row.AcademicYearId == year &&
+				row.StandardId == standard && row.DivisionId == student.DivisionId && row.IsActive)
+			select new AssignmentStudentPlacement { Student = student, RollNumber = row.RollNumber };
+	}
+
+	private sealed class AssignmentStudentPlacement
+	{
+		public Student Student { get; init; } = null!;
+		public int? RollNumber { get; init; }
 	}
 
 	private async Task<IQueryable<StudentIdCard>> GetValidAssignmentCardsAsync(Guid year) =>

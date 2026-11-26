@@ -666,7 +666,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     }
 
     private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true,
-        decimal amount = 1000m, bool oneTime = true, bool secondPaymentStage = false, bool optionalFee = false)
+        decimal amount = 1000m, bool oneTime = true, bool secondPaymentStage = false, bool optionalFee = false,
+        bool pendingPaymentStage = false)
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -698,6 +699,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             workflowInput.Transitions[0].ToStageId = followUp;
             workflowInput.Transitions.Add(new() { FromStageId = followUp, ToStageId = decision, IsDefault = true, Priority = 1 });
         }
+        if (paymentStage && pendingPaymentStage)
+        {
+            var earlier = Guid.NewGuid();
+            workflowInput.Stages[0].IsEntryStage = false;
+            foreach (var stage in workflowInput.Stages) stage.DisplayOrder++;
+            workflowInput.Stages.Insert(0, new()
+            {
+                Id = earlier, Code = "DOCUMENTS", Name = "Verify documents",
+                StageType = AdmissionWorkflowStageType.DocumentVerification, IsRequired = true, IsEntryStage = true,
+                ConfigurationJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    documentVerification = HandoffPolicy(new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" })
+                })
+            });
+            workflowInput.Transitions.Insert(0, new() { FromStageId = earlier, ToStageId = entry, IsDefault = true, Priority = 1 });
+        }
         var workflow = await _workflowAppService.CreateAsync(workflowInput);
         workflow = await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
         var offering = await CreateAvailableOfferingAsync(workflow.Id);
@@ -705,7 +722,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
         await ConfigureOfferingReadinessAsync(offering, cycle.AcademicYearId);
         var applicant = await CreateCertificationApplicantAsync(name, true, true, null);
         var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
-        (await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
+        if (!pendingPaymentStage)
+            (await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
         var policy = await GetRequiredService<ICollectionPolicyAppService>().CreateAsync(new()
         {
             AcademicYearId = cycle.AcademicYearId, PolicyName = "Admission counter policy", PolicyCode = $"COL-{Guid.NewGuid():N}"[..20],

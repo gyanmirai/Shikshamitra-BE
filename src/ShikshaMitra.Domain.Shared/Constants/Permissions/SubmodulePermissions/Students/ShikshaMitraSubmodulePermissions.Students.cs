@@ -71,6 +71,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			// Records submodules (defined in Students.Records.cs)
 			{ "Students.Records.StudentList", StudentListPermissionBundle() },
+			{ "Students.Records.Birthdays", new SubmoduleInfo(Records_Birthdays.All, Records_Birthdays.DisplayNames) },
 			{ "Students.Records.HouseManagement", new SubmoduleInfo(Records_HouseManagement.All, Records_HouseManagement.DisplayNames) },
 			{ "Students.Records.StudentICard", new SubmoduleInfo(Records_StudentICard.All, Records_StudentICard.DisplayNames) },
 			{ "Students.Records.Certificates", new SubmoduleInfo(Records_Certificates.All, Records_Certificates.DisplayNames) },

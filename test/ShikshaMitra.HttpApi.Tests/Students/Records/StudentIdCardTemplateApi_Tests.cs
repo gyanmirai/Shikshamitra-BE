@@ -43,6 +43,104 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 	private const string Delete = "Students.Records.StudentICard.Delete";
 
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_class_roster_filters_current_enrollment_metadata_before_paging_without_broadening_scope()
+	{
+		var owner = await CreateActorAsync();
+		var member = await SeedStudentAsync(owner);
+		var fixture = await InTenantAsync(owner.TenantId, async services =>
+		{
+			var students = services.GetRequiredService<IStudentRepository>();
+			var student = await students.GetAsync(member.Student);
+			student.AssignGrNumber("00041");
+			student.AssignRollNo(91);
+			student.SetPhotoBlobName("synthetic-photo-presence.jpg");
+			await students.UpdateAsync(student, true);
+			var standardId = student.StandardId!.Value;
+			var divisionId = student.DivisionId!.Value;
+			var enrollments = services.GetRequiredService<IRepository<StudentEnrollment, Guid>>();
+			var enrollment = await enrollments.GetAsync(row => row.StudentId == member.Student && row.AcademicYearId == member.Year);
+			enrollment.ChangePlacement(standardId, divisionId, 27);
+			await enrollments.UpdateAsync(enrollment, true);
+			await services.GetRequiredService<IRepository<StudentIdCard, Guid>>().InsertAsync(new StudentIdCard(Guid.NewGuid(),
+				owner.TenantId, member.Student, "ROSTER-001", "roster-issued-card", "{}", "{}", DateTime.UtcNow, owner.UserId, member.Year), true);
+
+			var siblingDivision = await services.GetRequiredService<DivisionManager>().CreateAsync(standardId, "Synthetic B", 30);
+			await services.GetRequiredService<IRepository<Division, Guid>>().InsertAsync(siblingDivision, true);
+			var sibling = new Student(Guid.NewGuid(), owner.TenantId, "Aarav", null, "Sibling", member.Year,
+				student.AcademicBoardId!.Value, student.AcademicMediumId, student.AcademicMediumStageId!.Value, standardId, siblingDivision.Id,
+				status: StudentLifeCycleStatusEnum.Enrolled);
+			sibling.AssignGrNumber("Roster-ALPHA");
+			await students.InsertAsync(sibling, true);
+			await enrollments.InsertAsync(StudentEnrollment.Create(Guid.NewGuid(), owner.TenantId, sibling.Id, member.Year, standardId, siblingDivision.Id), true);
+			await SeedLegacyEligibilityAsync(services, owner, sibling.Id);
+
+			var undivided = new Student(Guid.NewGuid(), owner.TenantId, "Zara", null, "Undivided", member.Year,
+				student.AcademicBoardId!.Value, student.AcademicMediumId, student.AcademicMediumStageId!.Value, standardId,
+				status: StudentLifeCycleStatusEnum.Enrolled);
+			await students.InsertAsync(undivided, true);
+			await enrollments.InsertAsync(StudentEnrollment.Create(Guid.NewGuid(), owner.TenantId, undivided.Id, member.Year, standardId, null), true);
+			await SeedLegacyEligibilityAsync(services, owner, undivided.Id);
+
+			var scopedUserId = Guid.NewGuid();
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(new IdentityUser(scopedUserId,
+				"roster-scope-" + scopedUserId.ToString("N"), scopedUserId.ToString("N") + "@example.test", owner.TenantId), true);
+			await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(),
+				owner.TenantId, userId: scopedUserId, academicYearId: member.Year, educationBoardId: student.AcademicBoardId,
+				educationMediumId: student.AcademicMediumId, educationMediumStageId: student.AcademicMediumStageId, standardId: standardId,
+				divisionId: divisionId, description: "Division-only roster filter test"), true);
+			return (StandardId: standardId, SiblingId: sibling.Id, ScopedActor: new Actor(owner.TenantId, scopedUserId));
+		});
+
+		using var viewer = AsActor(owner, View);
+		using var scoped = AsActor(fixture.ScopedActor, View);
+		var roster = $"/api/students/records/ids/assignments/{member.Year}/{fixture.StandardId}/roster";
+		var baseline = await ReadAsync(await viewer.GetAsync(roster + "?maxResultCount=1"));
+		baseline["totalCount"]!.GetValue<int>().ShouldBe(3);
+		baseline["items"]!.AsArray().Single()!["studentId"]!.GetValue<Guid>().ShouldBe(fixture.SiblingId);
+
+		var filtered = await ReadAsync(await viewer.GetAsync(roster + "?maxResultCount=1" +
+			"&columnFilters[0].column=studentName&columnFilters[0].operator=contains&columnFilters[0].value=sYnTh" +
+			"&columnFilters[1].column=rollNumber&columnFilters[1].operator=between&columnFilters[1].min=27&columnFilters[1].max=28" +
+			"&columnFilters[2].column=hasValidIssuedCard&columnFilters[2].operator=equals&columnFilters[2].value=true"));
+		filtered["totalCount"]!.GetValue<int>().ShouldBe(1);
+		var row = filtered["items"]!.AsArray().Single()!;
+		row["studentId"]!.GetValue<Guid>().ShouldBe(member.Student);
+		row["rollNumber"]!.GetValue<int>().ShouldBe(27);
+		row["hasPhoto"]!.GetValue<bool>().ShouldBeTrue();
+		row["photoBlobName"].ShouldBeNull();
+		row["grNumber"]!.GetValue<string>().ShouldBe("00041");
+
+		foreach (var (query, count) in new[]
+		{
+			("?search=27", 1), ("?search=2", 0), ("?search=91", 0),
+			("?columnFilters[0].column=grNumber&columnFilters[0].operator=equals&columnFilters[0].value=00041", 1),
+			("?columnFilters[0].column=grNumber&columnFilters[0].operator=equals&columnFilters[0].value=41", 0),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=equals&columnFilters[0].value=27", 1),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=equals&columnFilters[0].value=27.5", 0),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=greaterThan&columnFilters[0].value=26.5", 1),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=lessThan&columnFilters[0].value=27", 0),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=lessThan&columnFilters[0].value=27.5", 1),
+			("?columnFilters[0].column=rollNumber&columnFilters[0].operator=between&columnFilters[0].min=26.5&columnFilters[0].max=27.5", 1)
+		})
+			(await ReadAsync(await viewer.GetAsync(roster + query)))["totalCount"]!.GetValue<int>().ShouldBe(count, query);
+
+		const string siblingFilters = "?columnFilters[0].column=grNumber&columnFilters[0].operator=endsWith&columnFilters[0].value=alpha" +
+			"&columnFilters[1].column=hasValidIssuedCard&columnFilters[1].operator=equals&columnFilters[1].value=false";
+		var siblingResult = (await ReadAsync(await viewer.GetAsync(roster + siblingFilters)))["items"]!.AsArray().Single()!;
+		siblingResult["studentId"]!.GetValue<Guid>().ShouldBe(fixture.SiblingId);
+		siblingResult["rollNumber"].ShouldBeNull();
+		siblingResult["hasPhoto"]!.GetValue<bool>().ShouldBeFalse();
+		(await ReadAsync(await scoped.GetAsync(roster + siblingFilters)))["totalCount"]!.GetValue<int>().ShouldBe(0);
+		var undividedResult = (await ReadAsync(await viewer.GetAsync(roster + "?search=undivided")))["items"]!.AsArray().Single()!;
+		undividedResult["divisionName"].ShouldBeNull();
+
+		using var invalid = await viewer.GetAsync(roster + "?columnFilters[0].column=rollNumber&columnFilters[0].operator=between" +
+			"&columnFilters[0].min=28&columnFilters[0].max=27");
+		invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await invalid.Content.ReadAsStringAsync());
+		(await invalid.Content.ReadAsStringAsync()).ShouldContain("Students:Records:InvalidIdAssignmentRosterFilter");
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
 	public async Task Icard_class_assignment_separates_rule_management_from_issuing_and_prevents_duplicate_cards()
 	{
 		var actor = await CreateActorAsync();
@@ -67,7 +165,16 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 		var filtered = await ReadAsync(await viewer.GetAsync($"{classes}&standardId={placement.Empty}&maxResultCount=1"));
 		filtered["totalCount"]!.GetValue<int>().ShouldBe(1);
 		filtered["items"]!.AsArray().Single()!["standardId"]!.GetValue<Guid>().ShouldBe(placement.Empty);
-		var template = await ReadAsync(await client.PostAsJsonAsync(Route, Body("Class design"), JsonOptions));
+		var template = await ReadAsync(await client.PostAsJsonAsync(Route, new
+		{
+			name = "Class design", schoolName = "Contract test school", fields = new[] { "StudentName", "Class" }, schemaVersion = 2,
+			layoutJson = """
+				{"orientation":"Horizontal","width":428,"height":270,"widthMm":85.6,"heightMm":53.98,
+				 "front":{"elements":[{"id":"name","type":"text","fieldKey":"StudentName","label":"Name",
+				 "prefix":"Alexandra Elizabeth Christopher ","x":20,"y":20,"w":289,"h":25,
+				 "style":{"fontFamily":"Arial","fontSize":20,"fontWeight":700}}]}}
+				"""
+		}, JsonOptions));
 		var templateId = template["id"]!.GetValue<Guid>();
 		(await viewer.PutAsJsonAsync(rule, new { templateId }, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		var saved = await ReadAsync(await client.PutAsJsonAsync(rule, new { templateId }, JsonOptions));
@@ -87,10 +194,15 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 		using var export = await client.PostAsJsonAsync(rule + "/export", new { studentIds, concurrencyStamp, templateConcurrencyStamp }, JsonOptions);
 		export.StatusCode.ShouldBe(HttpStatusCode.OK, await export.Content.ReadAsStringAsync());
 		export.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+		var previewLayout = preview.AsArray().Single()!["templateSnapshot"]!["layoutJson"]!.GetValue<string>();
+		var previewSize = JsonNode.Parse(previewLayout)!["front"]!["elements"]![0]!["style"]!["fontSize"]!.GetValue<float>();
+		previewSize.ShouldBeLessThan(20f);
+		previewSize.ShouldBeGreaterThanOrEqualTo(4f);
 		var afterExport = (await ReadAsync(await viewer.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
 		afterExport["hasValidIssuedCard"]!.GetValue<bool>().ShouldBeFalse();
 		var issue = new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-first-issue" };
 		var first = (await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", issue, JsonOptions))).AsArray().Single()!;
+		first["templateSnapshot"]!["layoutJson"]!.GetValue<string>().ShouldBe(previewLayout);
 		var replay = (await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", issue, JsonOptions))).AsArray().Single()!;
 		replay["id"]!.GetValue<Guid>().ShouldBe(first["id"]!.GetValue<Guid>());
 		replay["studentSnapshot"]!["_AssignmentBatchFingerprint"].ShouldBeNull();
@@ -105,6 +217,7 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 		var afterIssue = (await ReadAsync(await viewer.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
 		afterIssue["hasValidIssuedCard"]!.GetValue<bool>().ShouldBeTrue();
 		var edit = await ReadAsync(await client.GetAsync(Route + "/" + templateId));
+		edit["layoutJson"]!.GetValue<string>().ShouldBe(template["layoutJson"]!.GetValue<string>());
 		edit["name"] = "Revised class design";
 		await ReadAsync(await client.PutAsJsonAsync(Route + "/" + templateId, edit, JsonOptions));
 		var revisedClass = (await ReadAsync(await viewer.GetAsync(classes)))["items"]!.AsArray()
@@ -119,6 +232,9 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 		changedTemplate.StatusCode.ShouldBe(HttpStatusCode.Conflict, await changedTemplate.Content.ReadAsStringAsync());
 		(await changedTemplate.Content.ReadAsStringAsync()).ShouldContain("Students:Records:IdAssignmentIssueKeyReused");
 		var issuedId = first["id"]!.GetValue<Guid>();
+		using var issuedPdf = await viewer.GetAsync($"/api/students/records/ids/{issuedId}/pdf");
+		issuedPdf.StatusCode.ShouldBe(HttpStatusCode.OK, await issuedPdf.Content.ReadAsStringAsync());
+		issuedPdf.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
 		(await client.PostAsJsonAsync($"/api/students/records/ids/{issuedId}/void", new { reason = "Synthetic replacement" }, JsonOptions)).IsSuccessStatusCode.ShouldBeTrue();
 		(await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-replacement-issue" }, JsonOptions)))
 			.AsArray().Single()!["id"]!.GetValue<Guid>().ShouldNotBe(issuedId);
@@ -376,13 +492,20 @@ public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory fac
 		var student = new Student(Guid.NewGuid(), actor.TenantId, "Synthetic", null, "HTTP Icard", year.Id, board.Id, medium.Id, stage.Id, standard.Id, division.Id, status: StudentLifeCycleStatusEnum.Enrolled);
 		await services.GetRequiredService<IStudentRepository>().InsertAsync(student, true);
 		await services.GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(StudentEnrollment.Create(Guid.NewGuid(), actor.TenantId, student.Id, year.Id, standard.Id, division.Id), true);
-		var reviewer = Guid.NewGuid(); await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(new IdentityUser(reviewer, "review-" + reviewer.ToString("N"), reviewer.ToString("N") + "@example.test", actor.TenantId), true);
-		var historical = new StudentRecordLegacyOverride(Guid.NewGuid(), actor.TenantId, student.Id, actor.UserId, "Verified synthetic school register", null);
-		historical.Decide(reviewer, true, "Independent synthetic review", DateTime.UtcNow);
-		await services.GetRequiredService<IRepository<StudentRecordLegacyOverride, Guid>>().InsertAsync(historical, true);
+		await SeedLegacyEligibilityAsync(services, actor, student.Id);
 		await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(), actor.TenantId, userId: actor.UserId, description: "Synthetic HTTP I-card tenant-wide actor"), true);
 		return (student.Id, year.Id);
 	});
+
+	private static async Task SeedLegacyEligibilityAsync(IServiceProvider services, Actor actor, Guid studentId)
+	{
+		var reviewer = Guid.NewGuid();
+		await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(new IdentityUser(reviewer,
+			"review-" + reviewer.ToString("N"), reviewer.ToString("N") + "@example.test", actor.TenantId), true);
+		var historical = new StudentRecordLegacyOverride(Guid.NewGuid(), actor.TenantId, studentId, actor.UserId, "Verified synthetic school register", null);
+		historical.Decide(reviewer, true, "Independent synthetic review", DateTime.UtcNow);
+		await services.GetRequiredService<IRepository<StudentRecordLegacyOverride, Guid>>().InsertAsync(historical, true);
+	}
 	private async Task<T> InTenantAsync<T>(Guid tenantId, Func<IServiceProvider, Task<T>> action)
 	{
 		using var services = Factory.Services.CreateScope(); using var tenant = services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);

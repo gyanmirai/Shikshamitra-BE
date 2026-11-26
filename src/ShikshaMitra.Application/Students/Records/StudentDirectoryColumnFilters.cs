@@ -17,17 +17,11 @@ public static class StudentDirectoryColumnFilters
 			if (filter == null) throw Invalid();
 			if (filter.Column is "name" or "grNumber" or "classDivision")
 			{
-				if (filter.Operator is not ("contains" or "equals" or "startsWith" or "endsWith") ||
-					string.IsNullOrWhiteSpace(filter.Value) || filter.Value.Length > 150) throw Invalid();
+				if (!IsValidTextFilter(filter)) throw Invalid();
 			}
 			else if (filter.Column == "rollNo")
 			{
-				if (filter.Operator == "between")
-				{
-					if (!filter.Min.HasValue || !filter.Max.HasValue || filter.Min > filter.Max ||
-						filter.Min < int.MinValue || filter.Max > int.MaxValue) throw Invalid();
-				}
-				else if (filter.Operator is not ("equals" or "greaterThan" or "lessThan") || !Number(filter.Value, out _)) throw Invalid();
+				if (!IsValidRollNumberFilter(filter)) throw Invalid();
 			}
 			else if (filter.Column == "status")
 			{
@@ -50,7 +44,7 @@ public static class StudentDirectoryColumnFilters
 			}
 			else if (filter.Column == "rollNo")
 			{
-				Number(filter.Value, out var value);
+				TryParseRollNumberFilterValue(filter.Value, out var value);
 				query = filter.Operator switch
 				{
 					"equals" => query.Where(row => row.RollNo == value),
@@ -63,18 +57,39 @@ public static class StudentDirectoryColumnFilters
 			{
 				var row = Expression.Parameter(typeof(StudentDirectoryFilterRow), "row");
 				var field = filter.Column switch { "name" => nameof(StudentDirectoryFilterRow.Name), "grNumber" => nameof(StudentDirectoryFilterRow.GrNumber), _ => nameof(StudentDirectoryFilterRow.ClassDivision) };
-				var text = Expression.Call(Expression.Property(row, field), nameof(string.ToLower), Type.EmptyTypes);
-				var term = Expression.Constant(filter.Value!.ToLowerInvariant());
-				Expression predicate = filter.Operator == "equals" ? Expression.Equal(text, term) :
-					Expression.Call(text, filter.Operator switch { "contains" => nameof(string.Contains), "startsWith" => nameof(string.StartsWith), _ => nameof(string.EndsWith) }, Type.EmptyTypes, term);
-				query = query.Where(Expression.Lambda<Func<StudentDirectoryFilterRow, bool>>(predicate, row));
+				query = ApplyTextFilter(query, Expression.Lambda<Func<StudentDirectoryFilterRow, string>>(Expression.Property(row, field), row), filter);
 			}
 		}
 		return query;
 	}
 
-	private static bool Number(string? raw, out decimal value) =>
+	internal static bool IsValidTextFilter(StudentDirectoryColumnFilterDto filter) =>
+		filter.Operator is ("contains" or "equals" or "startsWith" or "endsWith") &&
+		!string.IsNullOrWhiteSpace(filter.Value) && filter.Value.Length <= 150;
+
+	internal static bool IsValidRollNumberFilter(StudentDirectoryColumnFilterDto filter) =>
+		filter.Operator == "between"
+			? filter.Min.HasValue && filter.Max.HasValue && filter.Min <= filter.Max && filter.Min >= int.MinValue && filter.Max <= int.MaxValue
+			: filter.Operator is ("equals" or "greaterThan" or "lessThan") && TryParseRollNumberFilterValue(filter.Value, out _);
+
+	internal static bool TryParseRollNumberFilterValue(string? raw, out decimal value) =>
 		decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= int.MinValue && value <= int.MaxValue;
+
+	internal static IQueryable<TRow> ApplyTextFilter<TRow>(IQueryable<TRow> query,
+		Expression<Func<TRow, string>> selector, StudentDirectoryColumnFilterDto filter)
+	{
+		var text = Expression.Call(selector.Body, nameof(string.ToLower), Type.EmptyTypes);
+		var term = Expression.Constant(filter.Value!.ToLowerInvariant());
+		Expression predicate = filter.Operator == "equals" ? Expression.Equal(text, term) :
+			Expression.Call(text, filter.Operator switch
+			{
+				"contains" => nameof(string.Contains),
+				"startsWith" => nameof(string.StartsWith),
+				_ => nameof(string.EndsWith)
+			}, Type.EmptyTypes, term);
+		return query.Where(Expression.Lambda<Func<TRow, bool>>(predicate, selector.Parameters));
+	}
+
 	private static BusinessException Invalid() => new("Students:Records:InvalidDirectoryFilter");
 }
 

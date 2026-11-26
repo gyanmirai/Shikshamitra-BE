@@ -31,9 +31,10 @@ public partial class StudentIdCardAppService
 	}
 
 	private async Task<StudentIdCardTemplateDto> CaptureIdentityTemplateAsync(StudentIdCardTemplateDto template, StudentDocumentSnapshot student,
-		Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto> identitySnapshots)
+		Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto> identitySnapshots, bool fitStudentName)
 	{
 		var frozen = JsonSerializer.Deserialize<StudentIdCardTemplateDto>(JsonSerializer.Serialize(template, JsonOptions), JsonOptions)!;
+		if (fitStudentName) StudentIdCardDesign.FitAssignmentStudentName(frozen, student.Fields.GetValueOrDefault("StudentName"));
 		// Issued cards retain their design, never a live template's other student assignments.
 		frozen.Selection = null;
 		frozen.SelectionRestricted = false;

@@ -78,7 +78,7 @@ public partial class StudentIdCardAppService
 	{
 		await AuthorizeAssignmentAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View);
 		return await UseAssignmentAsync(academicYearId, standardId, input, template =>
-			PreviewCoreAsync(new StudentIdCardPreviewRequestDto { StudentIds = input.StudentIds }, template));
+			PreviewCoreAsync(new StudentIdCardPreviewRequestDto { StudentIds = input.StudentIds }, template, fitStudentName: true));
 	}
 
 	public async Task<StudentCertificatePdfDto> ExportAssignmentAsync(Guid academicYearId, Guid standardId, StudentIdCardAssignmentExportDto input)
@@ -90,7 +90,7 @@ public partial class StudentIdCardAppService
 				StudentIds = input.StudentIds,
 				PhotoEdits = input.PhotoEdits,
 				CardsPerPage = input.CardsPerPage ?? template.CardsPerPage
-			}, template));
+			}, template, forAssignmentPrint: true));
 	}
 
 	public async Task<List<StudentIdCardDto>> IssueAssignmentAsync(Guid academicYearId, Guid standardId, StudentIdCardAssignmentIssueDto input)
@@ -163,7 +163,7 @@ public partial class StudentIdCardAppService
 					throw new BusinessException(StudentErrorCodes.IdAssignmentChanged);
 				var selectedIds = input.StudentIds.ToArray();
 				var population = await GetAssignmentStudentPopulationAsync(year, standard);
-				if (await AsyncExecuter.CountAsync(population.Where(student => Enumerable.Contains(selectedIds, student.Id))) != selectedIds.Length)
+				if (await AsyncExecuter.CountAsync(population.Where(placement => Enumerable.Contains(selectedIds, placement.Student.Id))) != selectedIds.Length)
 					throw new BusinessException(StudentErrorCodes.IdAssignmentRosterChanged);
 				var result = await perform(MapTemplate(template));
 				await work.CompleteAsync();

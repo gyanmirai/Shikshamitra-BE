@@ -20,6 +20,27 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Pending_payment_can_save_joining_date_without_advancing_or_preparing_fees() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("EarlyJoiningDate", pendingPaymentStage: true);
+		var applicationId = fixture.Application.Id;
+		var workflow = await _applicationAppService.GetWorkflowAsync(applicationId);
+		workflow.Stages.Single(s => s.StageType == AdmissionWorkflowStageType.Payment).Status
+			.ShouldBe(AdmissionRuntimeStageStatus.Pending);
+		var service = GetRequiredService<IAdmissionPaymentJoiningDateAppService>();
+		var before = await service.GetAsync(applicationId);
+		before.CanEdit.ShouldBeTrue();
+		before.CanPreview.ShouldBeFalse();
+		before.CanSelectProrationPolicy.ShouldBeFalse();
+		var date = before.AcademicYearStartDate.AddDays(1);
+		var saved = await service.SaveAsync(applicationId, new() { JoiningDate = date.ToString("yyyy-MM-dd"), ConcurrencyStamp = before.ConcurrencyStamp });
+		saved.JoiningDate.ShouldBe(date);
+		(await service.GetAsync(applicationId)).JoiningDate.ShouldBe(date);
+		(await _applicationAppService.GetWorkflowAsync(applicationId)).CurrentStageInstanceId.ShouldBe(workflow.CurrentStageInstanceId);
+		(await AccountCountAsync(applicationId)).ShouldBe(0);
+	});
+
+	[Fact]
 	public Task Payment_joining_date_preview_and_capture_should_not_prepare_finance() => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CreateCollectibleAdmissionAsync("JoiningDate");

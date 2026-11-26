@@ -24,4 +24,7 @@ public static class AdmissionFormErrorCodes
 	public const string FormInUse = "Admissions.FormInUse";
 	public const string DependencyCycle = "Admissions.FormDependencyCycle";
 	public const string InvalidValidationRule = "Admissions.FormInvalidValidationRule";
+	public const string AddressMissingCountry = "Admissions.FormAddressMissingCountry";
+	public const string AddressMissingCityDependencies = "Admissions.FormAddressMissingCityDependencies";
+	public const string AddressOrder = "Admissions.FormAddressOrder";
 }

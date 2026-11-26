@@ -82,11 +82,16 @@ public class SaveHouseRequest
 
 public class HouseAssignmentRequest
 {
+	public const string DivisionScope = "division";
+	public const int MaxEnrollmentIds = 500;
+
 	public Guid AcademicMediumId { get; set; }
 	public Guid DivisionId { get; set; }
 	public Guid? HouseId { get; set; }
+	public string? TargetScope { get; set; }
+	public bool IncludeAssigned { get; set; }
 
-	[Required, MinLength(1), MaxLength(500)]
+	[Required, MaxLength(MaxEnrollmentIds)]
 	public List<Guid> EnrollmentIds { get; set; } = [];
 	public string? PreviewToken { get; set; }
 }

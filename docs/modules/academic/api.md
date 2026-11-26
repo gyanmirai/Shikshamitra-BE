@@ -98,6 +98,12 @@ Approval-required operations write no sendable intents until approval. Configure
 
 Rule changes, template publication, test sends, confirmation, approval, rejection, retry and cancellation write an action audit in the same transaction as the change. Audit data is limited to the actor, tenant, action, relevant identifiers, revisions, status and counts. Replays of completed actions reuse the original audit history.
 
+### Personal notification inbox
+
+`GET /api/communication/notifications/me/inbox` returns notifications for the signed-in user and school, including any applicable linked-student restrictions. The optional `prioritizeActions` query parameter puts current lesson plan revision notices and items with outstanding required acknowledgement first. Each group is ordered newest first, with the inbox item ID breaking timestamp ties. The default ordering remains newest first.
+
+Inbox items expose `requiresReview` for current lesson plan changes and `requiresAcknowledgement` from the linked campaign. The latter accompanies `acknowledgedAt`, which indicates whether the action is outstanding. The `unreadOnly` filter uses the read timestamp. Marking an item read does not acknowledge it. Acknowledging an item also marks it read.
+
 ### Personal notification preferences
 
 The authenticated school account owns its preferences. The endpoints below are relative to `/api/communication/notifications/me` and use the same current identity and student link checks as the inbox. Preference responses use `Cache-Control: no-store`.

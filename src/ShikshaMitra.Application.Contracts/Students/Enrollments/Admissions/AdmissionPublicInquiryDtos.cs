@@ -28,8 +28,10 @@ public class AdmissionPublicInquiryLinkDto
 {
 	public Guid Id { get; set; }
 	public Guid AdmissionCycleId { get; set; }
+	public string? AdmissionCycleName { get; set; }
 	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
+	public string? InquiryFormName { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public AdmissionInquirySource Source { get; set; }
 	public string? SourceDetail { get; set; }

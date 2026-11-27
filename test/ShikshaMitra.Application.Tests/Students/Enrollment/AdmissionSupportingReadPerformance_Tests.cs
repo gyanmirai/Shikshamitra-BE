@@ -19,6 +19,47 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Admission_period_create_and_clone_reuse_the_academic_year_without_reading_counts() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var offering = await CreateOptionalIntakeOfferingAsync();
+			var source = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
+			var service = GetRequiredService<IAdmissionCycleAppService>();
+			var start = DateTime.UtcNow.Date.AddDays(7);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+				db.ChangeTracker.Clear();
+				using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
+				var draft = await service.CreateAsync(new()
+				{
+					Name = "Read budget draft", AcademicYearId = source.AcademicYearId,
+					StartDate = start, EndDate = start.AddDays(30)
+				});
+				var clone = await service.CloneAsync(new()
+				{
+					SourceCycleId = source.Id, Name = "Read budget copy", AcademicYearId = source.AcademicYearId,
+					StartDate = start, EndDate = start.AddDays(30)
+				});
+
+				draft.AcademicYearName.ShouldNotBeNullOrWhiteSpace();
+				clone.AcademicYearName.ShouldBe(draft.AcademicYearName);
+				foreach (var row in new[] { draft, clone })
+				{
+					row.Status.ShouldBe(AdmissionCycleStatus.Draft);
+					row.LinkedOfferingCount.ShouldBe(0);
+					row.ActiveOfferingCount.ShouldBe(0);
+					row.ApplicationCount.ShouldBe(0);
+					row.ConcurrencyStamp.ShouldNotBeNullOrWhiteSpace();
+				}
+				DirectReadCount(capture, "academic_Years").ShouldBe(2);
+				capture.ReadCommands.ShouldNotContain(sql =>
+					sql.Contains("AppAdmissionOfferings", StringComparison.Ordinal) ||
+					sql.Contains("AppAdmissionApplications", StringComparison.Ordinal));
+			});
+		});
+
+	[Fact]
 	public Task Inquiry_capture_context_does_not_read_retired_capacity() =>
 		RunCertificationScenarioAsync(async () =>
 		{

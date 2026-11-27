@@ -15,6 +15,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -48,8 +49,35 @@ public class AdmissionPublicInquiryAppService(
 	private const string CopyTokenUnavailable = "Admissions.PublicInquiry.CopyTokenUnavailable";
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
-	public async Task<List<AdmissionPublicInquiryLinkDto>> GetLinksAsync() =>
-		(await links.GetListAsync()).OrderByDescending(item => item.CreationTime).Select(Map).ToList();
+	public async Task<List<AdmissionPublicInquiryLinkDto>> GetLinksAsync()
+	{
+		var canViewCycles = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Admissions.View);
+		var canViewForms = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View);
+		var tenantId = CurrentTenant.Id;
+		var linkQuery = await links.GetQueryableAsync();
+		var cycleQuery = (await cycles.GetQueryableAsync())
+			.Where(cycle => canViewCycles && cycle.TenantId == tenantId);
+		if (canViewCycles)
+		{
+			var studentScope = LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>();
+			var (hasAllAcademicYears, academicYearIds) = await studentScope.GetCurrentUserAcademicYearScopeAsync();
+			if (!hasAllAcademicYears)
+				cycleQuery = cycleQuery.Where(cycle => Enumerable.Contains(academicYearIds, cycle.AcademicYearId));
+		}
+		var formQuery = (await forms.GetQueryableAsync())
+			.Where(form => canViewForms && form.Purpose == AdmissionFormPurpose.Inquiry);
+
+		var rows = await AsyncExecuter.ToListAsync(
+			from link in linkQuery
+			join cycle in cycleQuery on link.AdmissionCycleId equals cycle.Id into matchingCycles
+			from cycle in matchingCycles.DefaultIfEmpty()
+			join form in formQuery on link.InquiryFormDefinitionId equals (Guid?)form.Id into matchingForms
+			from form in matchingForms.DefaultIfEmpty()
+			orderby link.CreationTime descending
+			select new { Link = link, CycleName = cycle == null ? null : cycle.Name, FormName = form == null ? null : form.Name });
+
+		return rows.Select(row => Map(row.Link, row.CycleName ?? string.Empty, row.FormName ?? string.Empty)).ToList();
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
 	public async Task<List<AdmissionPublicInquiryLinkOptionDto>> GetLinkOptionsAsync(Guid admissionCycleId)
@@ -429,12 +457,15 @@ public class AdmissionPublicInquiryAppService(
 				"Choose a published Inquiry form for this link.");
 	}
 
-	private static AdmissionPublicInquiryLinkDto Map(AdmissionPublicInquiryLink link) => new()
+	private static AdmissionPublicInquiryLinkDto Map(AdmissionPublicInquiryLink link,
+		string? cycleName = null, string? formName = null) => new()
 	{
 		Id = link.Id,
 		AdmissionCycleId = link.AdmissionCycleId,
+		AdmissionCycleName = cycleName,
 		CounsellorAssignmentProfileId = link.CounsellorAssignmentProfileId,
 		InquiryFormDefinitionId = link.InquiryFormDefinitionId,
+		InquiryFormName = formName,
 		Name = link.Name,
 		Source = link.Source,
 		SourceDetail = link.SourceDetail,

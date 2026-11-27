@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -91,7 +92,7 @@ public class AdmissionCycleAppService(
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Created, null, cycle.Status,
 			"Admission cycle draft created.");
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return Map(cycle, await LoadMapContextAsync([cycle]));
+		return MapNewDraft(cycle, academicYear);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
@@ -222,7 +223,7 @@ public class AdmissionCycleAppService(
 	public async Task<AdmissionCycleDto> CloneAsync(CloneAdmissionCycleDto input)
 	{
 		var source = await GetCycleAsync(input.SourceCycleId);
-		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		var academicYear = await EnsureAcademicYearExistsAsync(input.AcademicYearId);
 		await EnsureNameAvailableAsync(input.Name);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", cloneId);
@@ -233,7 +234,7 @@ public class AdmissionCycleAppService(
 		await RecordHistoryAsync(clone, AdmissionCycleHistoryAction.Cloned, null, clone.Status,
 			$"Admission cycle cloned from {source.Code}.");
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return Map(clone, await LoadMapContextAsync([clone]));
+		return MapNewDraft(clone, academicYear);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
@@ -514,6 +515,15 @@ public class AdmissionCycleAppService(
 			throw new BusinessException(AdmissionErrorCodes.OfferingDateRangeInvalid,
 				"Existing Admission Offering dates must remain inside the revised cycle window.");
 		}
+	}
+
+	private AdmissionCycleDto MapNewDraft(AdmissionCycle cycle, AcademicYear academicYear)
+	{
+		var emptyCounts = ReadOnlyDictionary<Guid, int>.Empty;
+		return Map(cycle, new AdmissionCycleMapContext(
+			new Dictionary<Guid, string> { [academicYear.Id] = academicYear.Name },
+			emptyCounts, emptyCounts, emptyCounts,
+			AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now)));
 	}
 
 	private async Task<AdmissionCycleMapContext> LoadMapContextAsync(IReadOnlyCollection<AdmissionCycle> cycles)

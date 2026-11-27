@@ -86,6 +86,8 @@ public partial class AdmissionFeeCollectionAppService
             Summary = new FeeSummaryDto
             {
                 TotalFee = (double)rows.Sum(d => d.OriginalAmount), PaidFee = (double)rows.Sum(d => d.PaidAmount),
+                RefundedAmount = await StudentDetails.ReadCompletedRefundAmountAsync(account.AcademicYearId,
+                    studentId: null, accountId: account.Id),
                 PendingFee = (double)rows.Sum(d => d.OutstandingAmount), ReconciliationAmount = reconciliation.Values.Sum(),
                 TotalCollectionAmount = (double)rows.Sum(d => Math.Ceiling(d.OutstandingAmount)),
                 TotalRoundingAdjustment = (double)rows.Sum(d => Math.Ceiling(d.OutstandingAmount) - d.OutstandingAmount),

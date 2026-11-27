@@ -90,9 +90,33 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 			var end = leavingDate.Date < serviceEnd ? leavingDate.Date : serviceEnd;
 			var explanation = "Withdrawal precedes the saved service period; no service is chargeable.";
 			var revisedAmount = 0m;
+			var weights = lines.Select(line => line.AllocationPercentage!.Value).ToArray();
+			if (head.MonthlyRateEffectiveDate.HasValue)
+			{
+				// Each set of dated installments stores its own allocation. At withdrawal the
+				// allocator only validates the weights; the entitlement uses each due's saved amount.
+				var share = decimal.Floor(100_000_000m / lines.Count) / 1_000_000m;
+				weights = Enumerable.Repeat(share, lines.Count).ToArray();
+				weights[^1] += 100m - share * lines.Count;
+			}
 			if (end >= start)
 			{
-				if (head.AmountBasis == "MonthlyRate")
+				if (head.MonthlyRateEffectiveDate.HasValue)
+				{
+					if (lines.Any(line => !line.CoverageStartDate.HasValue || !line.CoverageEndDate.HasValue))
+						throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+					revisedAmount = lines.Sum(line =>
+					{
+						var lineStart = line.ProrationChargeStartDate ?? start;
+						var lineEnd = line.ProrationChargeEndDate ?? serviceEnd;
+						if (end < lineStart) return 0m;
+						if (end >= lineEnd) return line.OriginalAmount;
+						return MonthlyFeePricing.Calculate(calculator, rule, line.ScheduledAmount,
+							line.CoverageStartDate!.Value, line.CoverageEndDate!.Value, lineStart, end).ProratedAmount;
+					});
+					explanation = "Recalculated each covered month using its recorded charge and proration policy.";
+				}
+				else if (head.AmountBasis == "MonthlyRate")
 				{
 					var rate = head.EffectiveAmount ?? throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
 					if (lines.Any(line => !line.CoverageStartDate.HasValue || !line.CoverageEndDate.HasValue))
@@ -112,7 +136,7 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 			// A previous service credit has already reduced the principal available for withdrawal.
 			revisedAmount += lines.Sum(x => x.GetOptionalServiceCancellationAmount());
 			var credits = WithdrawalProrationAllocation.Credits(lines.Select(x => x.OriginalAmount).ToArray(),
-				lines.Select(x => x.NetAmount).ToArray(), lines.Select(x => x.AllocationPercentage!.Value).ToArray(), revisedAmount,
+				lines.Select(x => x.NetAmount).ToArray(), weights, revisedAmount,
 				lines.Select(x => Math.Max(0m, x.PaidAmount - x.RefundedAmount)).ToArray());
 			for (var i = 0; i < lines.Count; i++)
 				if (credits[i] > 0m) plan.Lines.Add(new(lines[i].Id, credits[i], lines[i].PaidAmount, lines[i].RefundedAmount,

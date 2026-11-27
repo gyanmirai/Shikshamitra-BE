@@ -40,6 +40,17 @@ public class AccountSettingsPermissionApi_Tests(FinanceRoutingApiTestFactory fac
 		status.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
+	[Theory]
+	[InlineData("income-categories", "IncomeCategory", "")]
+	[InlineData("income-categories", "IncomeCategory", "?academicYearId=00000000-0000-0000-0000-000000000000")]
+	[InlineData("expense-categories", "ExpenseCategory", "")]
+	public async Task Add_With_No_Academic_Year_Returns_Bad_Request(string route, string setting, string query)
+	{
+		using var client = RestrictedClient($"Finance.Accounts.Settings.{setting}.Add");
+		var response = await client.PostAsJsonAsync($"/api/{route}{query}", new { name = "Missing academic year" });
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
 	[Fact]
 	public async Task Retired_account_head_resource_returns_gone()
 	{

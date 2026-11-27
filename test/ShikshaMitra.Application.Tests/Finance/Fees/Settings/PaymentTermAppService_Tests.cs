@@ -521,6 +521,39 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		(await structures.GetAsync(first.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version1);
 		(await structures.GetAsync(second.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version2);
 		(await _paymentTerms.GetUsageAsync(term.Id)).FeeStructureCount.ShouldBe(2);
+
+		await _paymentTerms.ArchiveAsync(term.Id, new() { Reason = "Hide from new fee setup" });
+		var archived = await _paymentTerms.GetAsync(term.Id);
+		archived.Status.ShouldBe(PaymentTermLifecycleStatus.Archived);
+		archived.Versions.Single(v => v.Id == version1).Status.ShouldBe(PaymentTermVersionStatus.Superseded);
+		archived.Versions.Single(v => v.Id == version2).Status.ShouldBe(PaymentTermVersionStatus.Published);
+		(await _paymentTerms.GetListAsync(new() { AcademicYearId = yearId })).Items
+			.ShouldNotContain(x => x.Id == term.Id);
+		(await _paymentTerms.GetListAsync(new() { AcademicYearId = yearId, IncludeArchived = true })).Items
+			.ShouldContain(x => x.Id == term.Id && x.Status == PaymentTermLifecycleStatus.Archived);
+		var structureService = GetRequiredService<IFeeStructureAppService>();
+		(await structureService.GetCatalogueAsync(metadata.Id, standardId)).Terms.ShouldNotContain(x => x.Id == term.Id);
+		(await structureService.GetTermScheduleAsync(metadata.Id, standardId, term.Id, version1)).VersionId.ShouldBe(version1);
+		var preview = new FeeStructurePreviewRequest
+		{
+			FeeStructureMetadataId = metadata.Id, StandardId = standardId, StructureId = first.Id,
+			StandardFeeStructures = new()
+			{
+				Name = first.Name,
+				FeeHeads = [new() { Id = firstDetail.Id, FeeHeadId = head.Id, Amount = 1000m,
+					PaymentTermId = term.Id, PaymentTermVersionId = version1 }]
+			}
+		};
+		(await structureService.PreviewAsync(preview)).Schedules.Single().PaymentTermVersionId.ShouldBe(version1);
+		preview.StructureId = null;
+		preview.StandardFeeStructures.FeeHeads[0].Id = null;
+		preview.StandardFeeStructures.FeeHeads[0].PaymentTermVersionId = version2;
+		(await structureService.PreviewAsync(preview)).Schedules.ShouldBeEmpty();
+		(await structures.GetAsync(first.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version1);
+		(await structures.GetAsync(second.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version2);
+		(await _paymentTerms.RestoreAsync(term.Id)).Status.ShouldBe(PaymentTermLifecycleStatus.Active);
+		(await structureService.GetCatalogueAsync(metadata.Id, standardId)).Terms.ShouldContain(x => x.Id == term.Id);
+
 		await _paymentTerms.CreateRevisionAsync(term.Id, new() { ChangeReason = "Update calendar" });
 		(await Should.ThrowAsync<BusinessException>(() => _paymentTerms.DeleteAsync(term.Id)))
 			.Code.ShouldBe(PaymentTermErrorCodes.DeleteWithReferences);

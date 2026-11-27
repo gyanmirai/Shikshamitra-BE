@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -16,6 +17,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Finance.Accounts.Settings;
 
@@ -63,6 +65,12 @@ public partial class TransactionCategoryAppService(
 		CreateTransactionCategoryRequest input, TransactionType categoryType)
 	{
 		await CheckPermissionAsync(categoryType, "Add");
+		if (academicYearId == Guid.Empty)
+		{
+			throw new AbpValidationException("An academic year is required.",
+				[new ValidationResult("Select an academic year.", [nameof(academicYearId)])]);
+		}
+
 		await EnsureScopeAsync(academicYearId);
 		await referenceLock.AcquireAsync();
 		var id = GuidGenerator.Create();

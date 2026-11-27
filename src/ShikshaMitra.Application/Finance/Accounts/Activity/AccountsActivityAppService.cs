@@ -50,6 +50,8 @@ public partial class AccountsActivityAppService(
     public async Task<AccountsActivityPageDto> GetListAsync(AccountsActivityInput input)
     {
         if (input.Direction != null) return await GetWorkspaceListAsync(input);
+        if (input.PaymentMethod.HasValue)
+            throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
         if (input.AcademicYearId == Guid.Empty)
             throw new UserFriendlyException("Select an academic year to view Accounts activity.");
         var source = input.Source?.Trim().ToLowerInvariant();

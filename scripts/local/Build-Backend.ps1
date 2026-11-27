@@ -1,12 +1,14 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('Host', 'DbMigrator')][string]$Target
+    [Parameter(Mandatory = $true)][ValidateSet('Host', 'DbMigrator')][string]$Target,
+    [ValidateNotNullOrEmpty()][string]$ArtifactsPath = '.artifacts/vscode'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\', '/')
+$compilerArtifacts = [IO.Path]::GetFullPath([IO.Path]::Combine($repository, $ArtifactsPath))
 $sha = [Security.Cryptography.SHA256]::Create()
 try { $hash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($repository.ToLowerInvariant()))).Replace('-', '') }
 finally { $sha.Dispose() }
@@ -32,7 +34,7 @@ try {
     Push-Location -LiteralPath $repository
     try {
         & dotnet build (Join-Path $repository "src/$projectName/$projectName.csproj") `
-            --artifacts-path (Join-Path $repository '.artifacts/vscode') `
+            --artifacts-path $compilerArtifacts `
             -m:1 -nr:false -p:UseSharedCompilation=false `
             /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
         $buildExitCode = $LASTEXITCODE
@@ -40,7 +42,7 @@ try {
             # Never run the debugger from compiler output. Stage the full
             # successful output first, then replace the stopped runtime copy.
             $buildExitCode = 1
-            $output = Join-Path $repository ".artifacts/vscode/bin/$projectName/debug"
+            $output = Join-Path $compilerArtifacts "bin/$projectName/debug"
             if (!(Test-Path -LiteralPath (Join-Path $output "$projectName.dll"))) {
                 throw 'The build did not produce the expected backend assembly.'
             }

@@ -45,7 +45,8 @@ through Windows PowerShell. Cleanup is part of that command, so terminal-task re
 do not replace it with a raw `dotnet build` command or rely only on a separate `dependsOn` task.
 The command returns cleanup/compiler failures to VS Code and refuses simultaneous Host/DbMigrator
 build commands for the same checkout before stopping any runtime.
-Build output lives under `.artifacts/vscode`. After success, the command stages the complete output,
+Build output defaults to `.artifacts/vscode`. Pass `-ArtifactsPath` to reuse a dedicated local compiler cache.
+After success, the command stages the complete output,
 including configuration and native dependencies, and replaces a separate stopped runtime snapshot.
 VS Code must launch `.artifacts/vscode-runtime/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.dll`
 or `.artifacts/vscode-runtime/ShikshaMitra.DbMigrator/ShikshaMitra.DbMigrator.dll`, never compiler output.

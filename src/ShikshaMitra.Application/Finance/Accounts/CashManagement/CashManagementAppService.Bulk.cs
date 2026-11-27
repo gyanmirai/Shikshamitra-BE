@@ -23,6 +23,8 @@ public partial class CashManagementAppService
 		if (input.IdempotencyKey == Guid.Empty || input.Notes?.Length > 1000)
 			throw new BusinessException(CashManagementErrorCodes.InvalidEvidence);
 		CashCollection.EnsureMoney(input.ExpectedAmount);
+		var amount = input.Amount ?? input.ExpectedAmount;
+		CashCollection.EnsureMoney(amount);
 		ValidateDocument(input);
 		using var uow = uows.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		await sourceLock.AcquireAsync(input.AcademicYearId);
@@ -39,17 +41,23 @@ public partial class CashManagementAppService
 			await uow.CompleteAsync();
 			return new CashBulkDepositResult(result.Amount, result.SourceCount);
 		}
-		var selected = await AsyncExecuter.ToListAsync(scoped.Where(x => x.Amount > x.SpentAmount + x.DepositedAmount + x.InTransitAmount)
-			.OrderBy(x => x.Id).Select(x => x.Id));
+		var candidates = await AsyncExecuter.ToListAsync(scoped.Where(x => x.Amount > x.SpentAmount + x.DepositedAmount + x.InTransitAmount)
+			.OrderBy(x => x.Id).Select(x => new { x.Id, Remaining = x.Amount - x.SpentAmount - x.DepositedAmount - x.InTransitAmount }));
+		var available = candidates.Sum(x => x.Remaining);
+		if (available != input.ExpectedAmount) throw new BusinessException(CashManagementErrorCodes.Stale);
+		if (amount > available) throw new BusinessException(CashManagementErrorCodes.InsufficientCash);
+
 		var cashRows = new System.Collections.Generic.List<CashCollection>();
-		foreach (var id in selected)
+		var selectedAmount = 0m;
+		foreach (var candidate in candidates)
 		{
-			await sourceLock.AcquireAsync(id);
-			cashRows.Add(await RequireForUpdateAsync(id, input.AcademicYearId));
+			if (selectedAmount >= amount) break;
+			await sourceLock.AcquireAsync(candidate.Id);
+			var cash = await RequireForUpdateAsync(candidate.Id, input.AcademicYearId);
+			if (cash.RemainingAmount != candidate.Remaining) throw new BusinessException(CashManagementErrorCodes.Stale);
+			cashRows.Add(cash);
+			selectedAmount += cash.RemainingAmount;
 		}
-		var amount = cashRows.Sum(x => x.RemainingAmount);
-		if (amount != input.ExpectedAmount) throw new BusinessException(CashManagementErrorCodes.Stale);
-		if (amount <= 0) throw new BusinessException(CashManagementErrorCodes.InsufficientCash);
 		var at = Now;
 		// The selected year identifies custody ownership. Its closing date does not
 		// prevent depositing outstanding historical cash at today's actual instant.
@@ -57,6 +65,8 @@ public partial class CashManagementAppService
 		string? storedFile = null;
 		if (input.FileContent != null)
 			storedFile = await LazyServiceProvider.LazyGetRequiredService<IFileStorageAppService>().UploadAsync(input.FileName!, input.FileContent);
+		var remaining = amount;
+		var bankLabel = BankLabel(bank);
 		foreach (var cash in cashRows)
 		{
 			var pending = cash.Status == 0;
@@ -69,16 +79,18 @@ public partial class CashManagementAppService
 					if (!cash.ExtraProperties.ContainsKey(bankKey))
 						cash.ExtraProperties[bankKey] = JsonSerializer.Serialize(new CashBankOption(cash.BankAccountId.Value, cash.BankLabel ?? ""));
 				}
-			cash.DepositRemaining(Actor, bank.Id, BankLabel(bank), at, input.Notes);
-			cash.ExtraProperties["DepositBank:" + cash.Deposits.Last().Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(bank.Id, BankLabel(bank)));
-			cash.ExtraProperties["BulkDeposit:" + input.IdempotencyKey.ToString("N")] = JsonSerializer.Serialize(new { depositId = cash.Deposits.Last().Id, bankAccountId = bank.Id, bankLabel = BankLabel(bank), amount = cash.Deposits.Last().Amount, actor = Actor, at, notes = input.Notes });
+			var deposited = Math.Min(remaining, cash.RemainingAmount);
+			var deposit = cash.DepositAvailable(Actor, bank.Id, bankLabel, deposited, at, input.Notes);
+			cash.ExtraProperties["DepositBank:" + deposit.Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(bank.Id, bankLabel));
+			cash.ExtraProperties["BulkDeposit:" + input.IdempotencyKey.ToString("N")] = JsonSerializer.Serialize(new { depositId = deposit.Id, bankAccountId = bank.Id, bankLabel, amount = deposited, actor = Actor, at, notes = input.Notes });
 			if (storedFile != null)
 			{
 				cash.ExtraProperties["SupportingDocumentFile"] = storedFile;
 				cash.ExtraProperties["SupportingDocumentName"] = Path.GetFileName(input.FileName);
 			}
-			if (pending) await FinalizeIncomeAsync(cash, bank);
+			if (pending) await ApplyDepositIncomeAsync(cash, bank, deposit);
 			await sources.UpdateAsync(cash, autoSave: true);
+			remaining -= deposited;
 		}
 		var response = new CashBulkDepositResult(amount, cashRows.Count);
 		// One anchor owns batch replay, atomically with every allocation and document.

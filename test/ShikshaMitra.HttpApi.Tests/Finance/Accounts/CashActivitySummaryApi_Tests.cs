@@ -79,6 +79,18 @@ public class CashActivitySummaryApi_Tests(FinanceReceiptApiTestFactory factory) 
 			$"/api/finance/cash-management?academicYearId={Factory.SeededAcademicYearId}&search={reference}-absent", JsonOptions);
 		AssertActivity(noMatch, 0m, 0m, 0m);
 		noMatch.GetProperty("availableCash").GetDecimal().ShouldBe(available);
+
+		var expenseDay = collected.AddMonths(1).ToString("yyyy-MM-dd");
+		var query = $"academicYearId={Factory.SeededAcademicYearId}&search={reference}&startDate={expenseDay}&endDate={expenseDay}";
+		var day = await Client.GetFromJsonAsync<JsonElement>($"/api/finance/cash-management?{query}", JsonOptions);
+		AssertActivity(day, 0m, 200m, 0m);
+		day.GetProperty("totalCount").GetInt32().ShouldBe(0);
+		day.GetProperty("availableCash").GetDecimal().ShouldBe(available);
+		var expensePage = await Client.GetFromJsonAsync<JsonElement>($"/api/finance/cash-management/expenses?{query}", JsonOptions);
+		expensePage.GetProperty("totalCount").GetInt32().ShouldBe(1);
+		var expense = expensePage.GetProperty("items")[0];
+		expense.GetProperty("amount").GetDecimal().ShouldBe(200m);
+		expense.GetProperty("sourceReference").GetString().ShouldBe(reference);
 	}
 
 	[Fact]

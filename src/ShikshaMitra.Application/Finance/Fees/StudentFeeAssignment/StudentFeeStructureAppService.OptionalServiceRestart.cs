@@ -191,13 +191,16 @@ public partial class StudentFeeStructureAppService
 	{
 		var pinned = scope.LatestPeriod?.PaymentTermVersionId ?? scope.Head.PaymentTermVersionId;
 		var terms = await paymentTermRepository.GetListAsync(term => term.AcademicYearId == scope.Year.Id &&
-			term.BoardId == scope.BoardId && term.Status == PaymentTermStatus.Active);
+			term.BoardId == scope.BoardId && (term.Status == PaymentTermStatus.Active ||
+				(pinned.HasValue && term.Versions.Any(version => version.Id == pinned.Value))));
 		var resolver = LazyServiceProvider.LazyGetRequiredService<PaymentTermScheduleResolver>();
 		var available = new List<OptionalServiceRestartTerm>();
 		foreach (var term in terms)
 		{
-			foreach (var version in term.Versions.Where(version => version.Status == PaymentTermVersionStatus.Published ||
-				version.Id == pinned && version.Status == PaymentTermVersionStatus.Superseded))
+			foreach (var version in term.Versions.Where(version =>
+				(version.Status == PaymentTermVersionStatus.Published &&
+					(term.Status == PaymentTermStatus.Active || version.Id == pinned)) ||
+				(version.Id == pinned && version.Status == PaymentTermVersionStatus.Superseded)))
 			{
 				// Avoid applying structure overrides to an alternative term version.
 				var schedule = resolver.ResolveServiceTerm(scope.Detail, term, version.Id);

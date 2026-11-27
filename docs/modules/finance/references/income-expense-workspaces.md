@@ -3,7 +3,7 @@ module: finance
 domain: accounts-workspaces
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-11-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -21,8 +21,8 @@ Frontend ownership is documented in [the frontend workspace contract](../../../.
 | Outcome / owner | Accountants inspect money by month and create non-student manual entries; Accounts owns transactions; Fees owns collection/refund lifecycle |
 | Scope | Current tenant, selected academic year, server academic access and scoped student query |
 | Actors | Exact existing Accounts IncomeTracking.View/Add and ExpenseTracking.View/Add permissions; no new role grants or seeding |
-| Read pipeline | Academic access -> direction/source/month/category/search -> stable date/ID ordering -> count -> pagination |
-| API | Extend GET `/api/accounts/register` with direction, calendar month/year and category; add GET `/api/accounts/register/{source}/{id}` with academicYearId |
+| Read pipeline | Academic access, then direction, source, month, category, payment method (Expenses), and search, then stable ordering, count, and pagination |
+| API | GET `/api/accounts/register` accepts direction, calendar month/year, category, and the optional Expenses payment method. GET `/api/accounts/register/{source}/{id}` accepts academicYearId |
 | Legacy compatibility | Existing direction-less register queries retain existing permission semantics; new direction scopes require their exact Income/Expense View grant |
 | Detail | Enforce the same direction/source permission, tenant, academic year, confirmed/awaiting state and student scope as the list; never return another category's transactions |
 | Manual create | Existing POST `/api/incomes` and `/api/expenses`; bank/reference fields follow the payment method. Cash requires a UUID idempotencyKey; cash Expense requires a pending cashCollectionId and current cashConcurrencyStamp. Validate active/effective category, method, money and academic date |
@@ -37,6 +37,7 @@ Month/year must be supplied together and intersect the server-owned academic-yea
 Use the application's India calendar for month boundaries and half-open UTC instant ranges; clip boundary months to the academic period.
 No month means the selected academic year's complete date interval.
 Collections use recorded payment date, manual entries use payment date, and paid refunds use payout/posting date.
+The Expenses payment-method filter uses the recorded transaction method or the immutable posting method for historical refunds.
 Covered fee periods are detail facts and do not change payment-month filtering.
 Bank labels are masked snapshots; category labels retain historical snapshots when available.
 Amounts remain decimal with their canonical precision; formatting never changes payload values.

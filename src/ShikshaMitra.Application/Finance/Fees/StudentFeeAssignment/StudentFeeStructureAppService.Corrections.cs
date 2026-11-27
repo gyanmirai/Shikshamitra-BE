@@ -97,6 +97,8 @@ public partial class StudentFeeStructureAppService
 				rows.Any(d => d.HasPaymentEvidence() || paidDues.Contains(d.Id)) ||
 				payments.Any(p => p.AcademicYearId == assignment.AcademicYearId && (p.StudentId == assignment.StudentId || assignment.FinanceFeeAccountId.HasValue && p.FinanceFeeAccountId == assignment.FinanceFeeAccountId)))
 				result[assignment.Id] = PaymentEditBlocker;
+			else if (assignment.HasEffectiveFeeChanges())
+				result[assignment.Id] = "This assignment contains effective-dated fees. Use Edit fees to change a future service period.";
 			else if (assignment.HasOptionalServiceEndDates() ||
 				rows.Any(d => d.HasProtectedAssignmentUse() || protectedDues.Contains(d.Id)) ||
 				concessions.Any(c => c.StudentId == assignment.StudentId && c.AcademicYearId == assignment.AcademicYearId))

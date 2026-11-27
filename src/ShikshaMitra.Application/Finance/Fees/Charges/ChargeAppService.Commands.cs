@@ -104,11 +104,12 @@ public partial class ChargeAppService
 		}
 		else
 		{
+			var previousCategoryId = request.ChargeCategoryId;
 			request.Update(input.ChargeName, input.ChargeCategoryId, input.PurposeDescription,
 				input.Amount, input.DueDate,
 				input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
 				input.AdditionalNotes);
-			await chargeRequestManager.SetIncomeCategoryFromChargeCategoryAsync(request);
+			await chargeRequestManager.SetIncomeCategoryFromChargeCategoryAsync(request, previousCategoryId);
 
 			var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending);
 			foreach (var line in lines)

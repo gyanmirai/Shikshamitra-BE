@@ -559,14 +559,50 @@ public class SimpleCashFlowApi_Tests : ShikshaMitraApiTestBase
         after.GetProperty("remainingAmount").GetDecimal().ShouldBe(100m);
         var register = await ReadAsync(Client, $"/api/accounts/register?academicYearId={year}&direction=income&search={reference}");
         register.GetProperty("items").GetArrayLength().ShouldBe(0);
-        using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(year.ToString()), "academicYearId");
-        form.Add(new StringContent(bankId.ToString()), "bankAccountId");
-        form.Add(new StringContent("100"), "expectedAmount");
-        form.Add(new StringContent(Guid.NewGuid().ToString()), "idempotencyKey");
-        (await Client.PostAsync("/api/finance/cash-management/bulk-deposit", form)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        async Task<HttpResponseMessage> DepositAsync(Guid bank, string available, string? amount, Guid key)
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(year.ToString()), "academicYearId");
+            form.Add(new StringContent(bank.ToString()), "bankAccountId");
+            form.Add(new StringContent(available), "expectedAmount");
+            form.Add(new StringContent(key.ToString()), "idempotencyKey");
+            if (amount != null) form.Add(new StringContent(amount), "amount");
+            return await Client.PostAsync("/api/finance/cash-management/bulk-deposit", form);
+        }
+        (await DepositAsync(bankId, "100", "100.01", Guid.NewGuid())).IsSuccessStatusCode.ShouldBeFalse();
+        (await DepositAsync(bankId, "100", "0", Guid.NewGuid())).IsSuccessStatusCode.ShouldBeFalse();
+        var key = Guid.NewGuid();
+        var partial = await DepositAsync(bankId, "100", "25.12", key);
+        partial.StatusCode.ShouldBe(HttpStatusCode.OK, await partial.Content.ReadAsStringAsync());
+        (await partial.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("amount").GetDecimal().ShouldBe(25.12m);
+        (await DepositAsync(bankId, "100", "25.12", key)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await DepositAsync(bankId, "100", "30", key)).IsSuccessStatusCode.ShouldBeFalse();
+        (await DepositAsync(bankId, "100", "25.12", Guid.NewGuid())).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var remaining = await ReadAsync(Client, $"/api/finance/cash-management/{cashId}?academicYearId={year}");
+        remaining.GetProperty("remainingAmount").GetDecimal().ShouldBe(74.88m);
+        remaining.GetProperty("depositedAmount").GetDecimal().ShouldBe(25.12m);
+        remaining.GetProperty("deposits").GetArrayLength().ShouldBe(1);
+
+        var (nextReviewer, nextBank) = await ReviewerAndBankAsync(year);
+        nextReviewer.Dispose();
+        var final = await DepositAsync(nextBank, "74.88", null, Guid.NewGuid());
+        final.StatusCode.ShouldBe(HttpStatusCode.OK, await final.Content.ReadAsStringAsync());
         var deposited = await ReadAsync(Client, $"/api/finance/cash-management/{cashId}?academicYearId={year}");
         deposited.GetProperty("remainingAmount").GetDecimal().ShouldBe(0m);
+        var deposits = deposited.GetProperty("deposits").EnumerateArray().ToArray();
+        deposits.Single(item => item.GetProperty("bankAccountId").GetGuid() == bankId).GetProperty("amount").GetDecimal().ShouldBe(25.12m);
+        deposits.Single(item => item.GetProperty("bankAccountId").GetGuid() == nextBank).GetProperty("amount").GetDecimal().ShouldBe(74.88m);
+        using var serviceScope = Factory.Services.CreateScope();
+        var services = serviceScope.ServiceProvider;
+        using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+        using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        var incomeEntries = await services.GetRequiredService<IRepository<ShikshaMitra.Finance.Accounts.Incomes.Transaction, Guid>>()
+            .GetListAsync(item => item.CashCollectionId == cashId);
+        incomeEntries.Single(item => !item.IsConfirmed).GetOriginalCashIncomeAmount().ShouldBe(100m);
+        incomeEntries.Single(item => item.IsConfirmed && item.BankAccountId == bankId).Amount.ShouldBe(25.12m);
+        incomeEntries.Single(item => item.IsConfirmed && item.BankAccountId == nextBank).Amount.ShouldBe(74.88m);
+        await uow.CompleteAsync();
     }
 
     private async Task<(HttpClient Client, Guid BankId)> ReviewerAndBankAsync(Guid? academicYearId = null)

@@ -219,6 +219,7 @@ public partial class StudentFeeStructureAppService
 		{
 			if (currentNames.TryGetValue(head.FeeHeadId, out var name)) head.FeeHeadName = name;
 			ProjectOptionalServicePeriods(assignment, head);
+			head.CanChangeVariableFee = enrollment.IsActive && SupportsVariableFeeChange(assignment, head, snapshot);
 		if (snapshot.CalculationVersion == "LegacyUnknown" || head.OptionalServicePeriods == null) continue;
 			var restartedDues = dues.Where(due => due.FeeHeadId == head.FeeHeadId && due.GetOptionalServicePeriodId().HasValue).ToList();
 			snapshot.Lines.AddRange(restartedDues.Select(due => OptionalServiceRestartLine(due, head.FeeHeadName, true)));

@@ -6,13 +6,39 @@ using System.Threading.Tasks;
 using ClosedXML.Excel;
 using CsvHelper;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.FeeRefund;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class LateFeeCollectionRuntime_Tests
 {
+	[Fact]
+	public async Task Collect_Form_Uses_The_Student_Records_Gr_Number_And_Only_Completed_Refunds()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		var (year, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(0, attachPolicy: true, enableLateFee: false);
+		var student = await _studentRepo.GetAsync(studentId);
+		student.AssignGrNumber("GR-FORM-17", reason: "Updated student record");
+		await _studentRepo.UpdateAsync(student, autoSave: true);
+		var refunds = GetRequiredService<IRepository<FeeRefundRequest, Guid>>();
+
+		foreach (var (amount, completed) in new[] { (200d, true), (100d, false) })
+		{
+			var id = Guid.NewGuid();
+			var request = new FeeRefundRequest(id, TestTenantId, studentId, year, $"REF-{id:N}",
+				[new FeeRefundLine(Guid.NewGuid(), id, dueId, amount)], "Cash", null, "Refund fixture");
+			if (completed) request.Approve(FakeAdminUserId);
+			await refunds.InsertAsync(request, autoSave: true);
+		}
+
+		var form = await _feeCollections.GetCollectFormAsync(studentId, year);
+		form.Student.GrNo.ShouldBe("GR-FORM-17");
+		form.Summary.RefundedAmount.ShouldBe(200m);
+	}
+
 	[Theory]
 	[InlineData(3000, 500, 0)]
 	[InlineData(5000, 1500, 1500)]

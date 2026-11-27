@@ -9,6 +9,7 @@ namespace ShikshaMitra.Finance.Accounts.CashManagement;
 public interface ICashManagementAppService : IApplicationService
 {
 	Task<CashPage> GetListAsync(CashQuery input);
+	Task<CashExpensePage> GetExpensesAsync(CashQuery input);
 	Task<CashDetail> GetAsync(Guid id, Guid academicYearId);
 	Task<CashOptions> GetOptionsAsync(Guid academicYearId, string operation);
 	Task<CashDetail> ApproveAsync(Guid id, CashApproval input);
@@ -25,6 +26,8 @@ public class CashQuery
 	public Guid? MediumId { get; set; }
 	public int? Month { get; set; }
 	public int? Year { get; set; }
+	public DateOnly? StartDate { get; set; }
+	public DateOnly? EndDate { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 20;
 	public int? Status { get; set; }
@@ -41,7 +44,7 @@ public class CashPage
 	public int PageSize { get; set; }
 	public CashSummary Summary { get; set; } = new();
 	public CashSummary YearSummary { get; set; } = new();
-	/// <summary>Collection, expense and confirmed-credit activity in the selected month, before source collection-month filtering.</summary>
+	/// <summary>Collection, expense and confirmed-credit activity in the selected period, before filtering by source collection date.</summary>
 	public CashActivitySummary ActivitySummary { get; set; } = new();
 	public decimal AvailableCash { get; set; }
 	public CashStatusCounts StatusCounts { get; set; } = new();
@@ -103,6 +106,8 @@ public record CashDeposit(Guid Id, decimal Amount, decimal CreditedAmount, int S
 	DateTimeOffset DepositDate, DateTimeOffset? CreditDate, Guid CreatedBy, bool CanConfirm,
 	Guid? BankAccountId = null, string? BankLabel = null);
 public record CashExpense(Guid Id, string Name, decimal Amount, DateTimeOffset PaymentDate);
+public record CashExpenseRow(Guid Id, string Name, decimal Amount, DateTimeOffset PaymentDate, string SourceReference);
+public record CashExpensePage(IReadOnlyList<CashExpenseRow> Items, int TotalCount);
 public record CashBankOption(Guid Id, string Label);
 public record CashSourceOption(Guid Id, string Label, decimal RemainingAmount, string ConcurrencyStamp);
 public record CashOptions(List<CashBankOption> BankAccounts, List<CashSourceOption> CashSources);
@@ -138,6 +143,9 @@ public class CashBulkDeposit
 	public Guid AcademicYearId { get; set; }
 	public Guid BankAccountId { get; set; }
 	public decimal ExpectedAmount { get; set; }
+	/// <summary>Amount to deposit. Older clients omit this to deposit the full expected balance.</summary>
+	[System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+	public decimal? Amount { get; set; }
 	public Guid IdempotencyKey { get; set; }
 	public string? Notes { get; set; }
 	public string? FileName { get; set; }

@@ -198,21 +198,21 @@ public class ClassTeacherAssignmentAppService(
 
 		try
 		{
+			var tenantId = CurrentTenant.Id;
+			var placements = from stage in await educationMediumStageRepository.GetQueryableAsync()
+				let medium = stage.EducationMedium
+				let board = medium.EducationBoard
+				where stage.Id == input.OrganizationId && stage.TenantId == tenantId &&
+					medium.TenantId == tenantId && board.TenantId == tenantId && board.AcademicYear.TenantId == tenantId
+				select new { StageId = stage.Id, MediumId = medium.Id, BoardId = board.Id, YearId = board.AcademicYearId };
+			var placement = await AsyncExecuter.SingleOrDefaultAsync(placements)
+				?? throw new BusinessException("ClassManagement:ClassTeacherAssignmentValidationFailed")
+					.WithData("Message", "The selected organization has no valid academic placement.");
+
 			var orgStandards = await standardRepository.GetListAsync(
 				standard => standard.EducationMediumStageId == input.OrganizationId
 			);
 			var orgStandardIds = orgStandards.Select(standard => standard.Id).ToList();
-			var classIds = input.Assignments.Select(assignment => assignment.ClassId).Distinct().ToList();
-			var standards = await standardRepository.GetListAsync(standard => classIds.Contains(standard.Id));
-			var educationMediumStageIds = standards
-				.Select(standard => standard.EducationMediumStageId)
-				.Distinct()
-				.ToList();
-			var educationMediumStages = await educationMediumStageRepository.GetListAsync(
-				stage => educationMediumStageIds.Contains(stage.Id)
-			);
-			var stageById = educationMediumStages.ToDictionary(stage => stage.Id);
-			var standardById = standards.ToDictionary(standard => standard.Id);
 
 			var existingAssignments = await classTeacherRepository.GetListAsync(
 				assignment => orgStandardIds.Contains(assignment.StandardId)
@@ -239,18 +239,15 @@ public class ClassTeacherAssignmentAppService(
 
 			foreach (var assignment in input.Assignments)
 			{
-				var standard = standardById[assignment.ClassId];
-				var stage = stageById[standard.EducationMediumStageId];
-				var status = ClassTeacherAssignmentStatus.Active;
-				if (input.SaveAsDraft &&
-					(!existingAssignmentsByKey.TryGetValue(
-						(assignment.ClassId, assignment.DivisionId),
-						out var existingAssignment) ||
-					 existingAssignment.TeacherId != assignment.TeacherId ||
-					 existingAssignment.Status == ClassTeacherAssignmentStatus.Draft))
-				{
-					status = ClassTeacherAssignmentStatus.Draft;
-				}
+				existingAssignmentsByKey.TryGetValue((assignment.ClassId, assignment.DivisionId), out var existing);
+				var retained = input.SaveAsDraft && existing is { Status: ClassTeacherAssignmentStatus.Active } &&
+					existing.TeacherId == assignment.TeacherId ? existing : null;
+				var status = input.SaveAsDraft && retained == null
+					? ClassTeacherAssignmentStatus.Draft : ClassTeacherAssignmentStatus.Active;
+				// A draft save must not change the effective scope of an already-confirmed teacher.
+				var (yearId, boardId, mediumId, stageId) = retained == null
+					? ((Guid?)placement.YearId, (Guid?)placement.BoardId, (Guid?)placement.MediumId, (Guid?)placement.StageId)
+					: (retained.AcademicYearId, retained.EducationBoardId, retained.EducationMediumId, retained.EducationMediumStageId);
 
 				var newAssignment = new ClassTeacher.ClassTeacher(
 					guidGenerator.Create(),
@@ -258,8 +255,11 @@ public class ClassTeacherAssignmentAppService(
 					assignment.ClassId,
 					assignment.DivisionId,
 					assignment.TeacherId,
-					stage.EducationMediumId,
-					educationMediumStageId: stage.Id,
+					placement.MediumId,
+					academicYearId: yearId,
+					educationBoardId: boardId,
+					educationMediumId: mediumId,
+					educationMediumStageId: stageId,
 					status: status
 				);
 

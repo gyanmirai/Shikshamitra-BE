@@ -34,23 +34,18 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 	public async Task<CashPage> GetListAsync(CashQuery input)
 	{
 		await AuthorizationService.CheckAsync(P.View);
-		if (input.Page < 1 || input.PageSize is < 1 or > 100 || input.Status is < 0 or > 1 || input.Search?.Length > 200)
-			throw new BusinessException(CashManagementErrorCodes.InvalidQuery);
+		ValidateReadInput(input);
 		var query = await ScopedQueryAsync(input.AcademicYearId);
 		var yearSummary = await SummarizeAsync(query);
-		query = await ApplyDisplayFiltersAsync(query, input);
-		var table = FinanceTableQuery.Parse(input.Filters, input.Search, input.SortBy, input.SortOrder, TableColumns);
-		query = table.Apply(query, TableFields);
-		if (!string.IsNullOrWhiteSpace(input.Search))
-		{
-			var search = input.Search.Trim().ToLower();
-			query = query.Where(x => x.Reference.ToLower().Contains(search) || x.PayerName.ToLower().Contains(search));
-		}
+		var (filtered, table) = await ReadFilteredSourcesAsync(query, input);
+		query = filtered;
+		var period = await ResolveActivityPeriodAsync(input);
 		// Activity follows each event's date, including expenses/credits against older sources.
-		// Register rows still follow the source collection month and keep their lifetime balances.
+		// Register rows still follow the source collection date and keep their lifetime balances.
 		var activitySummary = await SummarizeActivityAsync(
-			input.Status.HasValue ? query.Where(x => x.Status == input.Status) : query, input);
-		query = await ApplyCollectionMonthAsync(query, input);
+			input.Status.HasValue ? query.Where(x => x.Status == input.Status) : query, period);
+		if (period is { } interval)
+			query = await reads.FilterCollectionPeriodAsync(query, interval.Start, interval.End);
 		var statusCounts = await AsyncExecuter.ToListAsync(query.GroupBy(x => x.Status)
 			.Select(group => new { Status = group.Key, Count = group.Count() }));
 		var counts = new CashStatusCounts
@@ -102,9 +97,10 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		var priorDeposits = cash.Deposits.Count;
 		cash.Approve(Actor, bank.Id, BankLabel(bank), input.CountedAmount, approvedAt, input.Notes,
 			allowSelfApproval: await userScopes.IsAdminUserAsync(Actor));
-		if (cash.Deposits.Count > priorDeposits)
-			cash.ExtraProperties["DepositBank:" + cash.Deposits.Last().Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(bank.Id, BankLabel(bank)));
-		await FinalizeIncomeAsync(cash, bank);
+		var deposit = cash.Deposits.Count > priorDeposits ? cash.Deposits.Last() : null;
+		if (deposit != null)
+			cash.ExtraProperties["DepositBank:" + deposit.Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(bank.Id, BankLabel(bank)));
+		await ApplyDepositIncomeAsync(cash, bank, deposit);
 	});
 	public Task<CashDetail> DepositAsync(Guid id, CashDepositInput input) => ExecuteAsync(id, input, P.Deposit, "deposit", async cash =>
 	{

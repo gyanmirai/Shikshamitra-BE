@@ -25,7 +25,7 @@ public class LibraryAssessmentSourceScopeQuery(IRepository<LibraryCharge, Guid> 
 		cancellationToken.ThrowIfCancellationRequested();
 		var chargeQuery = (await charges.GetQueryableAsync()).Where(row => row.TenantId == tenant.Id);
 		if (!tenant.Id.HasValue || !user.Id.HasValue || scope.TenantId != tenant.Id || scope.UserId != user.Id || !scope.HasAnyAccess)
-			return chargeQuery.Where(_ => false).Select(row => new FinanceExternalReadableSource { SourceId = row.Id });
+			return NoReadableSources(chargeQuery);
 		var studentIds = (await access.GetStudentsAsync(scope)).Select(row => row.Id);
 		var employeeIds = (await access.GetEmployeesAsync(scope)).Select(row => row.Id);
 		var loans = await storedLoans.GetReadableLoansAsync(scope);
@@ -53,4 +53,15 @@ public class LibraryAssessmentSourceScopeQuery(IRepository<LibraryCharge, Guid> 
 				AcademicYearId = row.Charge.AcademicYearId
 			});
 	}
+
+	// Even a denied scope is composed into Finance joins. Bind every member that
+	// those queries inspect so EF can translate the empty branch without exposing rows.
+	internal static IQueryable<FinanceExternalReadableSource> NoReadableSources(IQueryable<LibraryCharge> charges) =>
+		charges.Where(_ => false).Select(row => new FinanceExternalReadableSource
+		{
+			SourceId = row.Id,
+			AcademicYearId = row.AcademicYearId,
+			StudentId = null,
+			EmployeeId = null
+		});
 }

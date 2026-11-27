@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Finance.Accounts.Activity;
 
@@ -10,6 +11,7 @@ public sealed class AccountsActivityInput
     public int? Month { get; set; }
     public int? Year { get; set; }
     public Guid? CategoryId { get; set; }
+    public PaymentMethodEnum? PaymentMethod { get; set; }
     public string? Source { get; set; }
     public string? Search { get; set; }
     public string? Filters { get; set; }

@@ -173,6 +173,16 @@ public partial class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMult
 		IncludedFeeHeadIds = ReadIncludedFeeHeadIds(snapshot);
 	}
 
+	public bool HasEffectiveFeeChanges() => ExtraProperties.ContainsKey("HasEffectiveFeeChanges");
+
+	public void ReplaceFutureVariableFeeSnapshot(string snapshot)
+	{
+		if (AssignmentSnapshotJson == null)
+			throw new Volo.Abp.BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
+		AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		ExtraProperties["HasEffectiveFeeChanges"] = true;
+	}
+
 	public void ChangeAssignedPolicies(
 		Guid? concessionId, Guid? concessionVersion, ConcessionFeeHeadScope concessionScope, IReadOnlyCollection<Guid> concessionHeads,
 		Guid collectionId, Guid collectionVersion, Guid? refundId, Guid? refundVersion, Guid? prorationId, Guid? prorationVersion,

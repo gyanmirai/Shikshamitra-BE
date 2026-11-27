@@ -48,9 +48,9 @@ public partial class FeeCollectionSummaryQueryService(
 		if (tableQuery.Filters.Count == 0 && !input.Status.HasValue && tableQuery.SortBy is null &&
 			string.IsNullOrWhiteSpace(input.Sorting))
 		{
-			var (pagePayers, singleAccountStudents, pageTotalCount) =
+			var (pagePayers, singleAccountStudents, rosterAccountStudents, pageTotalCount) =
 				await BuildPagedPayerRowsAsync(input, cancellationToken);
-			await PopulateBalancesAsync(input, pagePayers, singleAccountStudents, cancellationToken);
+			await PopulateBalancesAsync(input, pagePayers, singleAccountStudents, rosterAccountStudents, cancellationToken);
 			return new PagedResultDto<FeeCollectionSummaryItemDto>(pageTotalCount, MapToDto(pagePayers));
 		}
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
@@ -85,6 +85,7 @@ public partial class FeeCollectionSummaryQueryService(
 			DivisionId        = input.DivisionId,
 			Search            = input.Search,
 			Status            = input.Status,
+			StudentRecordsOnly = input.StudentRecordsOnly,
 		};
 
 		var allRows = await BuildRawRowsAsync(filterInput, cancellationToken);

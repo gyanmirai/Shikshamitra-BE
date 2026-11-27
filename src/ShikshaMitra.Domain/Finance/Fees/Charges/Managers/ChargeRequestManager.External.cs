@@ -12,7 +12,7 @@ public partial class ChargeRequestManager
 		decimal amount, DateOnly assessmentDate, DateOnly dueDate, string reason,
 		string sourceSnapshot, Guid requestorId)
 	{
-		var category = await GetActiveCategoryAsync(categoryId, yearId);
+		var category = await GetCategoryAsync(categoryId, yearId);
 		var request = ChargeRequest.CreateExternal(guidGenerator.Create(), tenantId, yearId,
 			"Library assessment", category.Id, reason, amount, dueDate, requestorId, sourceSnapshot);
 		request.SetProperty("IsApprovalRequiredAtCreation", category.IsApprovalRequired);

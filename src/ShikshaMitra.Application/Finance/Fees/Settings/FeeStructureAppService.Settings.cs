@@ -25,7 +25,7 @@ public partial class FeeStructureAppService
 		var year = await academicYearRepository.GetAsync(scope.AcademicYearId!.Value);
 		var board = await GetBoardCalendarAsync(scope.EducationBoardId!.Value);
 		var standard = await standardRepository.GetAsync(standardId);
-		var heads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.IsActive);
+		var heads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.IsActive && x.FeeCategory.IsActive);
 		var versions = await ActivePolicyVersionsAsync(year.Id);
 		// Default selection belongs to the current master. Historical snapshots retain
 		// their original flags and must not become defaults after a replacement.

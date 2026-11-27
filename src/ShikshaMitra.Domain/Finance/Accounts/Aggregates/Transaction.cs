@@ -57,6 +57,30 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		// even though its zero Income rows must stay out of all confirmed register reads.
 		IsConfirmed = net > 0;
 	}
+
+	public Transaction CreateCashDepositShare(Guid id, Guid cashId, Guid bankId, string bankLabel, decimal amount,
+		string? sourceKey)
+	{
+		if (PaymentMethod != 0 || TransactionType != TransactionType.Income || IsConfirmed ||
+			bankId == Guid.Empty || string.IsNullOrWhiteSpace(bankLabel) || IsAutomatic != (sourceKey != null))
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState);
+		if (amount > Amount)
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidAmount);
+		var share = new Transaction(id, TenantId, AcademicYearId, CategoryId, Name,
+			CategoryTags.Select(tag => tag.Value), amount, PaymentMethod, PaymentDate, Notes, TransactionType.Income)
+		{
+			CategoryNameSnapshot = CategoryNameSnapshot,
+			BankAccountId = bankId,
+			BankLabelSnapshot = bankLabel,
+			SourceKey = sourceKey,
+			SourceId = SourceId,
+		};
+		foreach (var key in new[] { "Counterparty", "PaymentReference" })
+			if (ExtraProperties.TryGetValue(key, out var value))
+				share.ExtraProperties[key] = value;
+		share.LinkCashCollection(cashId, studentId: StudentId, financeFeeAccountId: FinanceFeeAccountId, employeeId: EmployeeId);
+		return share;
+	}
  public void SetManualRouting(string categoryName, Guid? bankId, string? bankLabel, string? reference)
  {
    if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");

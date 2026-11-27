@@ -97,6 +97,14 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         var firstSorted = await ReadPageAsync(url + "&sortBy=amount&sortDescending=false&pageSize=1");
         firstSorted.TotalCount.ShouldBe(2); firstSorted.Items.Single().Amount.ShouldBe(5m);
         (await ReadPageAsync(url + "&sortBy=amount&sortDescending=false&pageSize=1&page=2")).Items.Single().Amount.ShouldBe(12.34m);
+        if (direction == "expense")
+        {
+            var byPaymentMethod = url + $"&paymentMethod={(int)PaymentMethodEnum.BankTransfer}&sortBy=amount&sortDescending=false&pageSize=1";
+            (await ReadPageAsync(byPaymentMethod)).TotalCount.ShouldBe(2);
+            (await ReadPageAsync(byPaymentMethod + "&page=2")).Items.Single().Amount.ShouldBe(12.34m);
+            (await ReadPageAsync(url + $"&paymentMethod={(int)PaymentMethodEnum.Cash}")).TotalCount.ShouldBe(0);
+            (await Client.GetAsync(url + "&paymentMethod=99")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
         var byParty = await ReadPageAsync(url + "&sortBy=counterparty&sortDescending=false&pageSize=1");
         byParty.TotalCount.ShouldBe(2);
         byParty.Items.Single().Counterparty.ShouldBe("Another payer");
@@ -321,6 +329,10 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         paid.Items.Single().SourceStatus.ShouldBe("Paid");
         paid.Items.Single().StudentName.ShouldBe(applicant); paid.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
         (await restricted.GetFromJsonAsync<AccountsActivityPageDto>(url, JsonOptions))!.TotalCount.ShouldBe(0);
+        var cashOnly = url + $"&paymentMethod={(int)PaymentMethodEnum.Cash}";
+        (await ReadPageAsync(cashOnly)).Items.Single().Amount.ShouldBe(25m);
+        (await ReadPageAsync(url + $"&paymentMethod={(int)PaymentMethodEnum.Cheque}")).TotalCount.ShouldBe(0);
+        (await restricted.GetFromJsonAsync<AccountsActivityPageDto>(cashOnly, JsonOptions))!.TotalCount.ShouldBe(0);
     }
 
     private async Task<System.Net.Http.HttpClient> DivisionScopedClientAsync()

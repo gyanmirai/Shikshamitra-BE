@@ -6,6 +6,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
@@ -51,6 +52,8 @@ public partial class ClassTeacherAssignmentAppService_Tests
 			{
 				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 				var stage = await _stageRepository.GetAsync(stageId);
+				var medium = await GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(stage.EducationMediumId);
+				var board = await GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
 				var standard = await _standardRepository.InsertAsync(
 					new Standard(Guid.NewGuid(), TestTenantId, "Draft class", 8, stage.Id, shiftId: null),
 					autoSave: true);
@@ -81,6 +84,10 @@ public partial class ClassTeacherAssignmentAppService_Tests
 				var draft = await _classTeacherRepository.SingleAsync(assignment =>
 					assignment.StandardId == standard.Id && assignment.DivisionId == division.Id);
 				draft.Status.ShouldBe(ClassTeacherAssignmentStatus.Draft);
+				draft.AcademicYearId.ShouldBe(board.AcademicYearId);
+				draft.EducationBoardId.ShouldBe(board.Id);
+				draft.EducationMediumId.ShouldBe(medium.Id);
+				draft.EducationMediumStageId.ShouldBe(stage.Id);
 				var draftRows = await _service.GetClassTeacherAssignmentsAsync(stage.Id);
 				var draftRow = draftRows.Single(row => row.ClassId == standard.Id && row.DivisionId == division.Id);
 				draftRow.AssignmentStatus.ShouldBe("Changed");
@@ -96,6 +103,10 @@ public partial class ClassTeacherAssignmentAppService_Tests
 				var active = await _classTeacherRepository.SingleAsync(assignment =>
 					assignment.StandardId == standard.Id && assignment.DivisionId == division.Id);
 				active.Status.ShouldBe(ClassTeacherAssignmentStatus.Active);
+				active.AcademicYearId.ShouldBe(board.AcademicYearId);
+				active.EducationBoardId.ShouldBe(board.Id);
+				active.EducationMediumId.ShouldBe(medium.Id);
+				active.EducationMediumStageId.ShouldBe(stage.Id);
 				var activeRows = await _service.GetClassTeacherAssignmentsAsync(stage.Id);
 				var activeRow = activeRows.Single(row => row.ClassId == standard.Id && row.DivisionId == division.Id);
 				activeRow.AssignmentStatus.ShouldBe("Active");

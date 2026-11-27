@@ -9,6 +9,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Uow;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -19,6 +20,8 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 [RemoteService(false)]
 public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 {
+	private const string ArchivePreservedFeeHeadStatusesProperty = "ArchivePreservedFeeHeadStatuses";
+
 	private readonly IRepository<FeeCategory, Guid> feeCategoryRepository;
 	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
 	private readonly IRepository<TransactionCategory, Guid> incomeCategoryRepository;
@@ -365,29 +368,31 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 		};
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeCategoryResponse> UpdateStatusAsync(Guid id, FeeCategoryStatusUpdateRequest input)
 	{
+		await referenceLock.AcquireAsync();
 		var feeCategory = await feeCategoryRepository.GetAsync(id);
 		var feeHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
 
-		if (!input.IsActive)
+		if (input.IsActive && !feeCategory.IsActive &&
+			!feeCategory.GetProperty<bool>(ArchivePreservedFeeHeadStatusesProperty))
 		{
-			var dependencies = await dependencyQuery.GetAsync(feeHeads.Select(x => x.Id));
-			foreach (var head in feeHeads.Where(x => dependencies[x.Id].IsBlocked))
-				throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeactivateInUse, head.Name, dependencies[head.Id]);
-		}
-
-		feeCategory.SetStatus(input.IsActive, input.DeactivationReason);
-		await feeCategoryRepository.UpdateAsync(feeCategory);
-
-		foreach (var feeHead in feeHeads)
-		{
-			if (input.IsActive)
+			// Earlier archives deactivated every head. Keep those categories restorable.
+			foreach (var feeHead in feeHeads.Where(x => !x.IsActive))
 			{
 				await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, feeHead.IncomeCategoryId);
+				feeHead.SetActiveStatus(true, null);
+				await feeHeadRepository.UpdateAsync(feeHead);
 			}
-			feeHead.SetActiveStatus(input.IsActive, input.DeactivationReason);
-			await feeHeadRepository.UpdateAsync(feeHead);
+		}
+
+		if (feeCategory.IsActive != input.IsActive)
+		{
+			feeCategory.SetStatus(input.IsActive, input.DeactivationReason);
+			if (!input.IsActive)
+				feeCategory.SetProperty(ArchivePreservedFeeHeadStatusesProperty, true);
+			await feeCategoryRepository.UpdateAsync(feeCategory);
 		}
 
 		return await MapToResponseAsync(feeCategory, feeHeads);

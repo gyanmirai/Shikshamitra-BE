@@ -31,13 +31,15 @@ public partial class LateFeeCollectionRuntime_Tests
 		var head = await _feeHeadRepo.GetAsync(feeHeadId);
 		var charge = new Charge(Guid.NewGuid(), TestTenantId, year, Guid.NewGuid(), "Uniform charge",
 			Guid.NewGuid(), student, payer.AcademicBoardId!.Value, payer.AcademicMediumId,
-			Guid.NewGuid(), Guid.NewGuid(), "Charge-only collection regression", 500m, DateTimeOffset.UtcNow,
+			Guid.NewGuid(), Guid.NewGuid(), "Charge-only collection regression", 500m,
+			new DateTimeOffset(2026, 11, 27, 18, 30, 0, TimeSpan.Zero),
 			ChargePriority.Medium, ChargeStatus.Pending, FakeAdminUserId);
 		charge.SetAccountingSnapshot(head.IncomeCategoryId);
 		charge.Approve(FakeAdminUserId);
 		await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
 
 		var form = await _feeCollections.GetCollectFormAsync(student, year);
+		form.Charges.Single().DueDate.ShouldBe(new DateOnly(2026, 11, 28));
 		form.AllocationBasis.ShouldBe("FeeHead");
 		form.AllocationRevision.ShouldNotBeNullOrWhiteSpace();
 		var input = new CollectFeeInput

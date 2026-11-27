@@ -47,6 +47,8 @@ All routes below are under `/api/student-fee-structure`; the client base URL alr
 | GET `student/{studentId}/history` | `.View` | Newest-first assignment history for the scoped student and academic year |
 | POST `student/{studentId}/optional-service-restart/preview` | `.View` + `.Add` + `.StopOptionalService` | Server-calculated monthly installment breakdown and a protected confirmation token |
 | POST `student/{studentId}/optional-service-restart` | `.View` + `.Add` + `.StopOptionalService` | Add a new service period and its canonical dues in one audited transaction |
+| POST `student/{studentId}/variable-fee-change/preview` | `.View` + `.Add` + `Finance.Policies.ProrationPolicy.OverrideChargePeriod` | Preview the affected installments, retained total and replacement amounts for a monthly variable fee |
+| POST `student/{studentId}/variable-fee-change` | Same as preview | Confirm the dated change and replace eligible dues atomically |
 
 The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`.
 Fixed amounts are read-only. A correction preserves an existing fixed amount on the same structure, including a previously saved override. A correction preserves the saved service dates for required heads on the same structure. Required heads on a replacement structure use verified defaults. Optional service date changes require the existing authorization. Variable heads accept a term amount or a monthly rate where supported.
@@ -79,7 +81,13 @@ Eligibility checks historical principal/late-fee allocations, year/student/accou
 Historical evidence checks disable only the soft-delete filter; tenant scope remains enabled.
 Concession, adjustment, refund, waiver, withdrawal and persisted late-fee use also block replacement with an actionable explanation.
 Legacy or inconsistent assignment/due evidence requires reconciliation.
-After payment, policy changes and optional-service changes use their own commands. They preserve the original schedule and its financial evidence.
+After payment, policy changes, optional-service changes and prospective variable fee changes use their own commands. These paths retain the recorded obligations and financial evidence outside their permitted scope.
+
+### Change a variable fee from a future month
+
+The scoped assignment detail exposes which required or selected optional heads have an active monthly variable schedule eligible for a dated change. The first day of a future month is the effective date. Earlier installments keep their original amounts, dates and IDs. The new amount and service end date must fit the board dates and the pinned payment term. Installments with payments, allocations or other dependent financial activity are protected.
+
+The preview uses the existing payment term and proration calculator and binds the assignment and affected due evidence to the request. Confirmation checks this evidence again and supersedes only eligible affected dues in a serializable transaction. Collections reads the replacement dues from its existing ledger. History records the effective date, previous and new values, reason and actor. Retrying the successful request returns the original result. The evidence uses existing JSON and ExtraProperties storage.
 
 ### Re-enable a stopped optional service
 

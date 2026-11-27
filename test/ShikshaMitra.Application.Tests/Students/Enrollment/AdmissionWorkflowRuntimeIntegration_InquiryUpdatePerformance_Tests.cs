@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					foreach (var (table, count) in reads)
 						count.ShouldBeLessThanOrEqualTo(1,
 							$"The update response must reuse the {table} snapshot already read by form validation in the same operation.");
+					var applicantLoads = capture.ReadCommands.Count(sql =>
+						sql.Contains("FROM \"AppAdmissionApplicants\" AS", StringComparison.Ordinal) &&
+						!sql.Contains("FROM \"AppAdmissionInquiries\"", StringComparison.Ordinal) &&
+						!sql.Contains(".\"FamilyId\" IN (", StringComparison.Ordinal));
+					Console.WriteLine($"Inquiry update applicant loads: {applicantLoads}.");
+					applicantLoads.ShouldBe(1, "Duplicate validation should reuse the applicant loaded by form validation.");
 					result.Id.ShouldBe(current.Id);
 					result.FamilyId.ShouldBe(current.FamilyId);
 					result.SourceDetail.ShouldBe(input.SourceDetail);

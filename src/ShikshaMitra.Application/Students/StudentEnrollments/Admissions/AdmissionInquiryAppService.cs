@@ -780,7 +780,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		var edited = await formEditService.ApplyAsync(inquiry, input, offering);
 		var normalizedPhone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.Phone);
 		await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryStudentDuplicateGuard>()
-			.EnsureDistinctAsync(inquiry, input.ApplicantName, normalizedPhone);
+			.EnsureDistinctAsync(inquiry, input.ApplicantName, normalizedPhone, edited.Applicant?.DateOfBirth);
 		var before = new
 		{
 			inquiry.ApplicantName,

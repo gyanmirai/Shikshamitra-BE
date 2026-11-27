@@ -11,6 +11,15 @@ public class AdmissionApplicationNumbering_Tests
 		AdmissionNumberResetPolicy reset = AdmissionNumberResetPolicy.AcademicYear, string separator = "/", string suffix = "", int digits = 5, long start = 1) =>
 		new(Guid.NewGuid(), Guid.NewGuid(), 1, "ddvs", separator, suffix, year, reset, digits, start);
 	[Fact]
+	public void Formats_numbers_without_an_optional_prefix_or_extra_separator()
+	{
+		var rule = new AdmissionApplicationNumberingRule(Guid.NewGuid(), Guid.NewGuid(), 1, "", "-", "",
+			AdmissionNumberYearFormat.None, AdmissionNumberResetPolicy.Continuous, 3, 1);
+		rule.Format(1, "").ShouldBe("001");
+		rule.TryReadSequence("001", "", out var sequence).ShouldBeTrue();
+		sequence.ShouldBe(1);
+	}
+	[Fact]
 	public void Format_uses_admission_academic_year_and_normalizes_school_text()
 	{
 		var rule = Rule(suffix: "a");

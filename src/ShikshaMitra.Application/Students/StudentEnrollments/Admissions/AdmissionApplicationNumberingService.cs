@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
@@ -11,9 +13,22 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [RemoteService(false)]
 public class AdmissionApplicationNumberingService(IAdmissionApplicationNumberingRepository repository,
 	IAdmissionReferenceSequenceRepository legacySequences, IRepository<AdmissionCycle, Guid> cycles,
-	IRepository<AcademicYear, Guid> years) : ApplicationService, ITransientDependency
+	IRepository<AcademicYear, Guid> years, StudentJourneyActorReader actorReader) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionApplicationNumberingDto> GetAsync() => Map(await repository.GetCurrentAsync(), await repository.HasIssuedAsync());
+	public async Task<List<AdmissionApplicationNumberingHistoryDto>> GetHistoryAsync()
+	{
+		var rules = await repository.GetHistoryAsync();
+		var names = await actorReader.ReadAsync(rules.Select(rule => rule.CreatorId));
+		return rules.Select(rule => new AdmissionApplicationNumberingHistoryDto
+		{
+			Version = rule.Version, CreationTime = rule.CreationTime,
+			ChangedByName = StudentJourneyActorReader.Name(names, rule.CreatorId) ?? "System",
+			Prefix = rule.Prefix, Suffix = rule.Suffix, Separator = rule.Separator,
+			YearFormat = rule.YearFormat, ResetPolicy = rule.ResetPolicy,
+			Digits = rule.Digits, StartingNumber = rule.StartingNumber
+		}).ToList();
+	}
 	public async Task<AdmissionApplicationNumberingDto> SaveAsync(SaveAdmissionApplicationNumberingDto input)
 	{
 		await repository.LockAsync();
@@ -21,10 +36,12 @@ public class AdmissionApplicationNumberingService(IAdmissionApplicationNumbering
 		if ((current?.Version ?? 0) != input.ExpectedVersion)
 			throw new BusinessException(AdmissionNumberingErrorCodes.Changed, "Numbering settings changed. Close and reopen this dialog before saving.");
 		var issued = await repository.HasIssuedAsync();
-		if (issued && current != null && (current.StartingNumber != input.StartingNumber || current.ResetPolicy != input.ResetPolicy))
+		if (!input.BeginNewSeries && issued && current != null && (current.StartingNumber != input.StartingNumber || current.ResetPolicy != input.ResetPolicy))
 			throw new BusinessException(AdmissionNumberingErrorCodes.SequenceLocked, "Starting number and reset policy cannot change after a number is issued.");
 		var rule = new AdmissionApplicationNumberingRule(GuidGenerator.Create(), CurrentTenant.Id, input.ExpectedVersion + 1,
 			input.Prefix, input.Separator, input.Suffix, input.YearFormat, input.ResetPolicy, input.Digits, input.StartingNumber);
+		var seriesVersion = input.BeginNewSeries ? rule.Version : current?.GetSeriesVersion();
+		if (seriesVersion.HasValue) rule.SetSeriesVersion(seriesVersion.Value);
 		await repository.InsertRuleAsync(rule);
 		return Map(rule, issued);
 	}
@@ -58,6 +75,8 @@ public class AdmissionApplicationNumberingService(IAdmissionApplicationNumbering
 			throw new BusinessException(AdmissionNumberingErrorCodes.Changed, "Numbering settings changed. Close and reopen this dialog before previewing.");
 		var rule = new AdmissionApplicationNumberingRule(Guid.Empty, CurrentTenant.Id, input.ExpectedVersion + 1,
 			input.Prefix, input.Separator, input.Suffix, input.YearFormat, input.ResetPolicy, input.Digits, input.StartingNumber);
+		var seriesVersion = input.BeginNewSeries ? rule.Version : current?.GetSeriesVersion();
+		if (seriesVersion.HasValue) rule.SetSeriesVersion(seriesVersion.Value);
 		var calendarYear = Clock.Now.ToUniversalTime().Year;
 		AcademicYear? year = null;
 		if (input.AcademicYearId.HasValue) year = await years.GetAsync(input.AcademicYearId.Value);
@@ -65,7 +84,12 @@ public class AdmissionApplicationNumberingService(IAdmissionApplicationNumbering
 			throw new BusinessException(AdmissionNumberingErrorCodes.Invalid, "Select an academic year to preview this format.");
 		var yearText = rule.YearText(calendarYear, year?.StartDate.Year ?? calendarYear, year?.EndDate.Year ?? calendarYear + 1);
 		var next = await repository.PeekNextAsync(rule, rule.ScopeKey(calendarYear, year?.Id ?? Guid.Empty), yearText);
-		return new() { NextNumber = rule.Format(next, yearText), NextSequence = next };
+		return new()
+		{
+			NextNumber = rule.Format(next, yearText),
+			NextSequence = next,
+			StartingNumberUnavailable = await repository.NumberExistsAsync(rule.Format(rule.StartingNumber, yearText))
+		};
 	}
 	private static AdmissionApplicationNumberingDto Map(AdmissionApplicationNumberingRule? rule, bool issued) => rule == null ? new() : new()
 	{

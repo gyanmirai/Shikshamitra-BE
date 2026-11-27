@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Uow;
@@ -11,6 +12,8 @@ public class AdmissionApplicationNumberingAppService(AdmissionApplicationNumberi
 {
 	[Authorize(Permissions.View)]
 	public Task<AdmissionApplicationNumberingDto> GetAsync() => service.GetAsync();
+	[Authorize(Permissions.View)]
+	public Task<List<AdmissionApplicationNumberingHistoryDto>> GetHistoryAsync() => service.GetHistoryAsync();
 	[Authorize(Permissions.Add)]
 	[UnitOfWork(isTransactional: true)]
 	public virtual Task<AdmissionApplicationNumberingDto> SaveAsync(SaveAdmissionApplicationNumberingDto input) => service.SaveAsync(input);

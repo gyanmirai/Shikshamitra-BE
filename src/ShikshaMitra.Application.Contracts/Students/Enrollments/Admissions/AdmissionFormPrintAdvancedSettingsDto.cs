@@ -122,6 +122,7 @@ public sealed class AdmissionPrintFlowSettingsDto
 {
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? StepTitles { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? SectionNumbers { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? SmartPageFitting { get; set; }
 }
 
 public sealed class AdmissionPrintSectionSettingsDto
@@ -130,6 +131,7 @@ public sealed class AdmissionPrintSectionSettingsDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Spacing { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? FullWidth { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? StartNewPage { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? KeepTogether { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? KeepHeading { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? RepeatTableHeadings { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? BlankRows { get; set; }
@@ -180,6 +182,7 @@ public sealed class AdmissionPrintContentTranslationDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Declaration { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ParentLabel { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? OfficeLabel { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string?>? CustomSignatureLabels { get; set; }
 }
 
 public sealed class AdmissionPrintCopiesSettingsDto

@@ -119,6 +119,12 @@ internal static class AdmissionFormPrintSettingsValidation
 					if (item == null) Invalid("Enter text for every document checklist item.");
 					Text(item, 128, "document checklist item");
 				}
+				if (translation.CustomSignatureLabels?.Count > 4) Invalid("Use at most 4 custom signature labels.");
+				foreach (var label in translation.CustomSignatureLabels ?? [])
+				{
+					if (label == null) Invalid("Enter text for every custom signature label.");
+					Text(label, 128, "custom signature label");
+				}
 			}
 			if (content.Translations != null && content.Translations.Keys.Any(key =>
 				!Regex.IsMatch(key, "^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))))

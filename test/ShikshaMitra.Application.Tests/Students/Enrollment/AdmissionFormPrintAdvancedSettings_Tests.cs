@@ -10,6 +10,20 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionFormPrintAdvancedSettings_Tests
 {
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void Page_fitting_and_section_grouping_survive_saved_settings(bool enabled)
+	{
+		var advanced = new JsonObject
+		{
+			["flow"] = new JsonObject { ["smartPageFitting"] = enabled },
+			["sections"] = new JsonObject { ["DETAILS"] = new JsonObject { ["keepTogether"] = enabled } }
+		};
+		var form = Form();
+		AdmissionFormMetadataStore.WriteExperience(form, Input(advanced.ToJsonString()));
+		JsonNode.DeepEquals(Settings(form)["advanced"], advanced).ShouldBeTrue();
+	}
 	[Fact]
 	public void Instruction_typography_survives_saved_settings()
 	{
@@ -18,6 +32,23 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 		AdmissionFormMetadataStore.WriteExperience(form, Input(advanced));
 		JsonNode.DeepEquals(Settings(form)["advanced"], JsonNode.Parse(advanced)).ShouldBeTrue();
 	}
+
+	[Fact]
+	public void Custom_signature_labels_roundtrip_per_language_with_blank_draft_entries()
+	{
+		var englishLabels = new JsonArray("Guardian signature", "", "Principal signature", new string('x', 128));
+		var translations = new JsonObject
+		{
+			["en"] = new JsonObject { ["customSignatureLabels"] = englishLabels },
+			["gu"] = new JsonObject { ["customSignatureLabels"] = new JsonArray("વાલીની સહી") },
+			["hi"] = new JsonObject { ["customSignatureLabels"] = new JsonArray() }
+		};
+		var advanced = new JsonObject { ["content"] = new JsonObject { ["translations"] = translations } };
+		var form = Form();
+		AdmissionFormMetadataStore.WriteExperience(form, Input(advanced.ToJsonString()));
+		JsonNode.DeepEquals(Settings(form)["advanced"], advanced).ShouldBeTrue();
+	}
+
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private const string Advanced = """
 		{"paper":{"orientation":"landscape","margins":{"top":10,"right":11,"bottom":12,"left":13}},
@@ -108,6 +139,8 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	[InlineData("{\"content\":{\"instructionTextSize\":\"100\"}}")]
 	[InlineData("{\"content\":{\"instructionTextWeight\":\"heavy\"}}")]
 	[InlineData("{\"content\":{\"translations\":{\"en\":null}}}")]
+	[InlineData("""{"content":{"translations":{"en":{"customSignatureLabels":["A","B","C","D","E"]}}}}""")]
+	[InlineData("""{"content":{"translations":{"en":{"customSignatureLabels":[null]}}}}""")]
 	[InlineData("{\"content\":{\"parentSignatureImage\":\"data:text/plain;base64,AA==\"}}")]
 	[InlineData("{\"content\":{\"officeSignatureImage\":\"data:image/png;base64,not base64!\"}}")]
 	[InlineData("{\"copies\":{\"unanswered\":\"guess\"}}")]
@@ -126,6 +159,7 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 		{
 			new JsonObject { ["header"] = new JsonObject { ["title"] = new string('x', 129) } },
 			new JsonObject { ["content"] = new JsonObject { ["translations"] = new JsonObject { ["en"] = new JsonObject { ["instructions"] = new string('x', 2001) } } } },
+			new JsonObject { ["content"] = new JsonObject { ["translations"] = new JsonObject { ["en"] = new JsonObject { ["customSignatureLabels"] = new JsonArray(new string('x', 129)) } } } },
 			new JsonObject { ["content"] = new JsonObject { ["parentSignatureImage"] = "data:image/png;base64," + Convert.ToBase64String(new byte[5 * 1024 * 1024 + 1]) } },
 			new JsonObject { ["content"] = new JsonObject { ["translations"] = new JsonObject { ["en"] = new JsonObject { ["checklist"] = new JsonArray(System.Linq.Enumerable.Range(0, 21).Select(index => (JsonNode?)JsonValue.Create($"Item {index}")).ToArray()) } } } },
 			new JsonObject { ["sections"] = Collection(129) },

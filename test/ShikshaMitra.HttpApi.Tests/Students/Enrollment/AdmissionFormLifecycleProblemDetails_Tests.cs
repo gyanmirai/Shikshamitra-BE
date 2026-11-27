@@ -20,7 +20,8 @@ public class AdmissionFormLifecycleProblemDetails_Tests
 	[Theory]
 	[InlineData(AdmissionErrorCodes.OfferingFormNotPublished, "Reason", "Inquiry Form 2026 is archived. Restore it or select a published replacement.", "Restore")]
 	[InlineData(AdmissionErrorCodes.OfferingWorkflowNotPublished, "Reason", "Admission workflow 'Standard admission' is archived. Publish an eligible version and select it in this offering.", "Publish")]
-	[InlineData(AdmissionFormErrorCodes.RestoreInvalidDefinition, "Errors", "Missing required section", "Clone")]
+	[InlineData(AdmissionFormErrorCodes.RestoreInvalidDefinition, "Errors",
+		"Add a required Primary contact selector when both Father and Mother contacts are configured.; Admissions.FormInvalidOptions:APPLICANT_GENDER", "Clone")]
 	[InlineData(AdmissionFormErrorCodes.ArchivedRequired, "Reason", "", "archived")]
 	[InlineData(AdmissionFormErrorCodes.DraftAlreadyExists, "DraftId", "00000000-0000-0000-0000-000000000001", "existing draft")]
 	[InlineData(AdmissionFormErrorCodes.VersionSourceRequired, "Reason", "", "already a draft")]
@@ -48,5 +49,8 @@ public class AdmissionFormLifecycleProblemDetails_Tests
 		detail.ShouldNotContain("Business rule violated");
 		detail.ShouldNotContain("{Reason}");
 		detail.ShouldNotContain("{Errors}");
+		if (code != AdmissionFormErrorCodes.RestoreInvalidDefinition) return;
+		detail.ShouldNotContain(AdmissionFormErrorCodes.InvalidOptions);
+		json.RootElement.GetProperty("data").GetProperty(field).GetString().ShouldBe(value);
 	}
 }

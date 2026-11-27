@@ -3,7 +3,7 @@ module: common
 domain: development
 content_type: How-to
 status: canonical
-updated_on: 2026-11-17
+updated_on: 2026-11-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -57,6 +57,10 @@ Set workspace `debug.onTaskErrors` to `abort` so a failed pre-launch build canno
 The mutex protects these build commands; independent raw CLI builds or manual launches must not run
 concurrently against that same output folder.
 The helpers and regression checks live in the backend repository.
+
+After changing a backend endpoint or request contract, use **Rebuild and restart local backend** before testing it from the frontend.
+**Run Local Stack (FE + BE)** reuses a ready backend to preserve the development session.
+Readiness confirms the service can respond. It can still serve the previous contract until a fresh runtime snapshot starts.
 
 ```powershell
 pwsh -NoProfile -File scripts/local/tests/Stop-BackendProcess.Tests.ps1

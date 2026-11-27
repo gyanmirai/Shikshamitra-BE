@@ -13,6 +13,7 @@ using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Security.UserScope;

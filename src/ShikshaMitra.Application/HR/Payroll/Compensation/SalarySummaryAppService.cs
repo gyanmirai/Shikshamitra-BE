@@ -59,7 +59,13 @@ public class SalarySummaryAppService(
 		var slabs = await professionalTax.GetListAsync(x => x.IsActive && x.JurisdictionCode == salary.Revision.StatutoryProfile && x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo >= date));
 		var configuration = await esiConfiguration.ResolveAsync(date);
 		PayrollEsiStatutoryContext? esiContext = null;
-		try { esiContext = (await esi.ResolveAsync(date.Year, date.Month, [employeeId], components.ToLookup(x => x.EmployeeId), resolved)).GetValueOrDefault(employeeId); }
+		try
+		{
+			esiContext = (await esi.ResolveForConfigurationAsync(
+				new DateTime(date.Year, date.Month, 1), [employeeId],
+				components.ToLookup(x => x.EmployeeId), resolved, configuration))
+				.GetValueOrDefault(employeeId);
+		}
 		catch (BusinessException error) when (error.Code is HRErrorCodes.StatutoryRuleNotFound or HRErrorCodes.EsiPolicyNotEffective) { summary.BlockingIssues.Add("ESI_POLICY_REQUIRED"); }
 		if (esiContext != null)
 			await esiCompensation.RecalculateAsync(resolved, new Dictionary<Guid, PayrollEsiStatutoryContext> { [employeeId] = esiContext },

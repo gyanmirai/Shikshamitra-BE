@@ -34,8 +34,19 @@ public class PayrollEsiContextResolver(
 		IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution>? compensation = null)
 	{
 		var payrollMonth = new DateTime(year, month, 1);
+		return await ResolveForConfigurationAsync(
+			payrollMonth, employeeIds, componentsByEmployee, compensation,
+			await configurationResolver.ResolveAsync(payrollMonth));
+	}
+
+	internal async Task<IReadOnlyDictionary<Guid, PayrollEsiStatutoryContext>> ResolveForConfigurationAsync(
+		DateTime payrollMonth,
+		IReadOnlyCollection<Guid> employeeIds,
+		ILookup<Guid, EmployeePayrollComponent> componentsByEmployee,
+		IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution>? compensation,
+		EsiPayrollConfiguration? configuration)
+	{
 		var monthEnd = payrollMonth.AddMonths(1).AddDays(-1);
-		var configuration = await configurationResolver.ResolveAsync(payrollMonth);
 		var establishment = configuration?.ToCalculationEstablishment();
 		if (establishment is null)
 		{

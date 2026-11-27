@@ -337,6 +337,8 @@ With no employee ID, a statutory override must be a complete onboarding draft (`
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/active` exposes only valid active templates to Compensation Manage users.
 The settings list returns Active, Needs setup, and Archived templates to Salary Template View users.
+Both lists read the editable version and count version history in the database.
+Use the versions endpoint when the historical rules are needed.
 `GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
 `POST /api/payroll/salary-templates` creates a complete active template, and `PUT /api/payroll/salary-templates/{id}` atomically creates the next active immutable version.
 `POST /api/payroll/salary-templates/preview` accepts current rules, salary basis, monthly amount, effective month, PF selection, and optional template/version/concurrency context under Salary Templates View permission.

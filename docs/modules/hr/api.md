@@ -789,6 +789,11 @@ The grouped register (`GET /api/hr/attendance/register/grouped`) accepts indexed
 
 Grouped `sorting` accepts one `employeeName`, `present`, `employeeGroup` or `department` field with `asc`/`desc`. Unknown fields fall back to the existing exception-priority order. Employee ID provides stable ties. HR register Excel/PDF exports deserialize the same criteria and call the same grouped reader for every export batch; no loaded-page filter or separate unscoped query is used. This additive contract needs no schema migration.
 
+Register calendar reads load overlapping academic years once per request and overlapping policy assignments once per academic year.
+Policy and calendar lookups reuse request-local results, including missing configuration, and date-specific assignment precedence still applies.
+Scoped stage labels are resolved together using the same access rules.
+Global exception ordering, population totals and filtering still require reading the matching population before paging.
+
 ### Reporting table queries
 
 `POST /api/hr/reports/runs/query` accepts `skip`, `take` and `criteria` for private generated-report history.

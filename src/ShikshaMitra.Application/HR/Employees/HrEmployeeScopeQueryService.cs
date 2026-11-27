@@ -154,21 +154,26 @@ public class HrEmployeeScopeQueryService(
 			return employeeStageIds.First();
 		}
 
-		var stageScopes = await stageScopeReader.GetByStageIdsAsync(employeeStageIds);
-		foreach (var stageId in employeeStageIds)
+		var accessible = await ResolveAccessibleDisplayStagesAsync(employeeStageIds, scope);
+		return employeeStageIds.Where(accessible.Contains).Select(stageId => (Guid?)stageId).FirstOrDefault();
+	}
+
+	internal async Task<HashSet<Guid>> ResolveAccessibleDisplayStagesAsync(
+		IReadOnlyCollection<Guid> stageIds, UserScopeContext scope)
+	{
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
+			return stageIds.ToHashSet();
+
+		var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
+		return stageIds.Where(stageId =>
 		{
 			stageScopes.TryGetValue(stageId, out var parentScope);
-			if (scope.CanAccessMediumStage(
+			return scope.CanAccessMediumStage(
 				stageId,
 				parentScope?.MediumId,
 				parentScope?.BoardId,
-				parentScope?.AcademicYearId))
-			{
-				return stageId;
-			}
-		}
-
-		return null;
+				parentScope?.AcademicYearId);
+		}).ToHashSet();
 	}
 
 	private async Task EnsureStageInScopeAsync(UserScopeContext scope, Guid educationMediumStageId)

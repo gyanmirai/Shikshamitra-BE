@@ -57,14 +57,13 @@ public class AttendanceRegisterLookupReader(
 
 		foreach (var holiday in holidays.OrderBy(x => x.StartDate))
 		{
-			var holidayStart = holiday.StartDate;
-			var holidayEnd = holiday.EndDate;
-			for (var date = holidayStart; date <= holidayEnd; date = date.AddDays(1))
+			var first = Math.Max(start.DayNumber, holiday.StartDate.DayNumber);
+			var last = Math.Min(end.DayNumber, holiday.EndDate.DayNumber);
+			for (var day = first; day <= last; day++)
 			{
-				if (requestedDates.Contains(date) && !lookup.ContainsKey(date))
-				{
-					lookup[date] = new HolidayInfo(holiday.HolidayName);
-				}
+				var date = DateOnly.FromDayNumber(day);
+				if (requestedDates.Contains(date))
+					lookup.TryAdd(date, new HolidayInfo(holiday.HolidayName));
 			}
 		}
 
@@ -86,12 +85,11 @@ public class AttendanceRegisterLookupReader(
 		var result = new Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo>();
 		var start = dateList.First();
 		var end = dateList.Last();
-		var requestedDates = dateList.ToHashSet();
 		var centralHolidayLookup = await BuildHolidayLookupAsync(dateList);
 		var query = await workCalendarHolidayRepository.GetQueryableAsync();
 		var staff = await asyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync()).Where(x => distinctEmployeeIds.Contains(x.Id)));
-		using var batch = attendanceWorkCalendarResolver.BeginReadBatch(staff);
-		var holidaysByCalendar = new Dictionary<Guid, List<WorkCalendarHoliday>>();
+		using var batch = await attendanceWorkCalendarResolver.BeginReadBatchAsync(staff, start, end);
+		var holidaysByCalendar = new Dictionary<Guid, Dictionary<DateOnly, HolidayInfo>>();
 
 		foreach (var employeeId in distinctEmployeeIds)
 		{
@@ -119,25 +117,24 @@ public class AttendanceRegisterLookupReader(
 				}
 				if (!holidaysByCalendar.TryGetValue(calendarId, out var holidays))
 				{
-					holidays = await asyncExecuter.ToListAsync(query.Where(x =>
+					var calendarHolidays = await asyncExecuter.ToListAsync(query.Where(x =>
 						x.WorkCalendarPolicyId == calendarId &&
 						x.IsIncluded &&
 						x.ToDate >= start &&
 						x.FromDate <= end));
+					holidays = new Dictionary<DateOnly, HolidayInfo>();
+					foreach (var holiday in calendarHolidays.OrderBy(x => x.FromDate).ThenBy(x => x.HolidayName))
+					{
+						var first = Math.Max(start.DayNumber, holiday.FromDate.DayNumber);
+						var last = Math.Min(end.DayNumber, holiday.ToDate.DayNumber);
+						var info = new HolidayInfo(holiday.HolidayName);
+						for (var day = first; day <= last; day++)
+							holidays.TryAdd(DateOnly.FromDayNumber(day), info);
+					}
 					holidaysByCalendar[calendarId] = holidays;
 				}
-
-				foreach (var holiday in holidays.OrderBy(x => x.FromDate).ThenBy(x => x.HolidayName))
-				{
-					for (var holidayDate = holiday.FromDate; holidayDate <= holiday.ToDate; holidayDate = holidayDate.AddDays(1))
-					{
-						if (requestedDates.Contains(holidayDate) && holidayDate == date)
-						{
-							result.TryAdd((employeeId, date), new HolidayInfo(holiday.HolidayName));
-							break;
-						}
-					}
-				}
+				if (holidays.TryGetValue(date, out var calendarHoliday))
+					result.TryAdd((employeeId, date), calendarHoliday);
 			}
 		}
 

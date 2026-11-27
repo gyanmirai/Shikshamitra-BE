@@ -55,6 +55,10 @@ public class AttendanceRegisterRowReader(
 		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(
 			employeeIds,
 			input.AcademicYearId);
+		var displayStageIds = input.EducationMediumStageId.HasValue
+			? []
+			: await hrEmployeeScopeQueryService.ResolveAccessibleDisplayStagesAsync(
+				stageLookup.Values.SelectMany(stages => stages).Distinct().ToList(), scope);
 
 		foreach (var employee in employees)
 		{
@@ -72,7 +76,8 @@ public class AttendanceRegisterRowReader(
 				stages = stages.Where(input.EducationMediumStageIds.Contains).ToList();
 			}
 			employee.AssignedStageIds = stages;
-			employee.EducationMediumStageId = await hrEmployeeScopeQueryService.ResolveDisplayStageAsync(stages, scope, input.EducationMediumStageId);
+			employee.EducationMediumStageId = input.EducationMediumStageId ??
+				stages.Where(displayStageIds.Contains).Select(stageId => (Guid?)stageId).FirstOrDefault();
 		}
 
 		// Filter the complete scoped population before generating days, totals and pagination.

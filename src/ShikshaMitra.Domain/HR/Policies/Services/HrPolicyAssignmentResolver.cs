@@ -17,12 +17,30 @@ public class HrPolicyAssignmentResolver(
 {
 	private Dictionary<Guid, List<Group>>? batchGroups;
 	private Dictionary<(Guid, DateTime), List<HrPolicyAssignment>>? batchAssignments;
-	internal IDisposable BeginReadBatch()
+	private Dictionary<Guid, ILookup<string, HrPolicyAssignment>>? batchAssignmentsByTarget;
+	private Dictionary<(Guid Year, Guid Employee), List<PolicyTargetKey>>? batchTargets;
+	private (DateTime Start, DateTime End)? batchPeriod;
+
+	internal IDisposable BeginReadBatch((DateTime Start, DateTime End)? period = null)
 	{
 		var previousGroups = batchGroups;
 		var previousAssignments = batchAssignments;
-		batchGroups = new(); batchAssignments = new();
-		return new Volo.Abp.DisposeAction(() => { batchGroups = previousGroups; batchAssignments = previousAssignments; });
+		var previousAssignmentsByTarget = batchAssignmentsByTarget;
+		var previousTargets = batchTargets;
+		var previousPeriod = batchPeriod;
+		batchGroups = new();
+		batchAssignments = period == null ? new() : null;
+		batchAssignmentsByTarget = period != null ? new() : null;
+		batchTargets = period != null ? new() : null;
+		batchPeriod = period;
+		return new Volo.Abp.DisposeAction(() =>
+		{
+			batchGroups = previousGroups;
+			batchAssignments = previousAssignments;
+			batchAssignmentsByTarget = previousAssignmentsByTarget;
+			batchTargets = previousTargets;
+			batchPeriod = previousPeriod;
+		});
 	}
 	internal async Task<HrPolicyAssignmentResolution> ResolveForEmployeeAsync(
 		Employee employee,
@@ -30,9 +48,10 @@ public class HrPolicyAssignmentResolver(
 		DateTime date,
 		CancellationToken cancellationToken,
 		HrPolicyAssignment? proposedAssignment = null,
-		Guid? replacedAssignmentId = null)
+		Guid? replacedAssignmentId = null,
+		bool includeSteps = true)
 	{
-		return await ResolveAsync(employee, null, academicYearId, date, cancellationToken, proposedAssignment, replacedAssignmentId);
+		return await ResolveAsync(employee, null, academicYearId, date, cancellationToken, proposedAssignment, replacedAssignmentId, includeSteps);
 	}
 
 	internal async Task<HrPolicyAssignmentResolution> ResolvePreviewAsync(
@@ -53,31 +72,17 @@ public class HrPolicyAssignmentResolver(
 		DateTime date,
 		CancellationToken cancellationToken,
 		HrPolicyAssignment? proposedAssignment,
-		Guid? replacedAssignmentId)
+		Guid? replacedAssignmentId,
+		bool includeSteps = true)
 	{
-		var targets = await BuildTargetKeysAsync(employee, groupId, academicYearId, cancellationToken);
+		var targets = await GetTargetKeysAsync(employee, groupId, academicYearId, cancellationToken);
 		if (targets.Count == 0)
 		{
 			return new HrPolicyAssignmentResolution(null, [BuildDefaultStep("matched", "default_fallback")]);
 		}
 
 		var targetKeys = targets.Select(x => x.TargetKey).Distinct().ToList();
-		var query = await assignmentRepository.GetQueryableAsync();
-		if (batchAssignments != null && !batchAssignments.ContainsKey((academicYearId, date)))
-		{
-			batchAssignments[(academicYearId, date)] = await AsyncExecuter.ToListAsync(query.Where(x =>
-				x.AcademicYearId == academicYearId && x.IsActive && x.EffectiveFrom <= date &&
-				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date)), cancellationToken);
-		}
-		var candidates = batchAssignments != null
-			? batchAssignments[(academicYearId, date)].Where(x => targetKeys.Contains(x.TargetKey)).ToList()
-			: await AsyncExecuter.ToListAsync(query
-			.Where(x =>
-				x.AcademicYearId == academicYearId &&
-				x.IsActive &&
-				targetKeys.Contains(x.TargetKey) &&
-				x.EffectiveFrom <= date &&
-				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date)), cancellationToken);
+		var candidates = await ReadCandidatesAsync(academicYearId, date, targetKeys, cancellationToken);
 
 		// Overlay a detached draft without changing the persisted candidates or the resolution algorithm.
 		if (replacedAssignmentId.HasValue)
@@ -96,9 +101,60 @@ public class HrPolicyAssignmentResolver(
 			.ThenBy(x => x.Id)
 			.FirstOrDefault();
 
+		if (!includeSteps)
+			return new HrPolicyAssignmentResolution(winner, []);
+
 		var steps = BuildResolutionSteps(targets, candidates, winner);
 		steps.Add(BuildDefaultStep(winner is null ? "matched" : "skipped", winner is null ? "default_fallback" : "lower_specificity"));
 		return new HrPolicyAssignmentResolution(winner, steps);
+	}
+
+	private async Task<List<HrPolicyAssignment>> ReadCandidatesAsync(
+		Guid year, DateTime date, List<string> targetKeys, CancellationToken cancellationToken)
+	{
+		if (batchPeriod is { } period && batchAssignmentsByTarget != null)
+		{
+			if (!batchAssignmentsByTarget.TryGetValue(year, out var byTarget))
+			{
+				var query = await assignmentRepository.GetQueryableAsync();
+				var assignments = await AsyncExecuter.ToListAsync(query.Where(x =>
+					x.AcademicYearId == year && x.IsActive && x.EffectiveFrom <= period.End &&
+					(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= period.Start)), cancellationToken);
+				batchAssignmentsByTarget[year] = byTarget = assignments.ToLookup(x => x.TargetKey);
+			}
+			return targetKeys.SelectMany(key => byTarget[key])
+				.Where(x => x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date))
+				.ToList();
+		}
+
+		if (batchAssignments?.TryGetValue((year, date), out var datedAssignments) == true)
+		{
+			return datedAssignments.Where(x => targetKeys.Contains(x.TargetKey)).ToList();
+		}
+
+		var datedQuery = (await assignmentRepository.GetQueryableAsync()).Where(x =>
+			x.AcademicYearId == year && x.IsActive && x.EffectiveFrom <= date &&
+			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date));
+		if (batchAssignments == null)
+		{
+			return await AsyncExecuter.ToListAsync(datedQuery.Where(x => targetKeys.Contains(x.TargetKey)), cancellationToken);
+		}
+
+		var all = await AsyncExecuter.ToListAsync(datedQuery, cancellationToken);
+		batchAssignments[(year, date)] = all;
+		return all.Where(x => targetKeys.Contains(x.TargetKey)).ToList();
+	}
+
+	private async Task<List<PolicyTargetKey>> GetTargetKeysAsync(
+		Employee? employee, Guid? groupId, Guid year, CancellationToken cancellationToken)
+	{
+		if (batchTargets == null || employee == null)
+			return await BuildTargetKeysAsync(employee, groupId, year, cancellationToken);
+
+		var key = (year, employee.Id);
+		if (!batchTargets.TryGetValue(key, out var targets))
+			batchTargets[key] = targets = await BuildTargetKeysAsync(employee, groupId, year, cancellationToken);
+		return targets;
 	}
 
 	private async Task<List<PolicyTargetKey>> BuildTargetKeysAsync(

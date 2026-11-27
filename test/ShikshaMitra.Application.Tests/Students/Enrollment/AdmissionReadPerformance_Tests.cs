@@ -23,6 +23,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workflow = await CreateAndPublishCurrentWorkflowAsync();
 			var offering = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId:
 				AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
+			var cycleName = await WithUnitOfWorkAsync(async () => (await _cycleRepository.GetAsync(offering.AdmissionCycleId)).Name);
 			var inquiryId = await WithUnitOfWorkAsync(async () =>
 			{
 				var inquiry = new AdmissionInquiry(Guid.NewGuid(), TestTenantId, $"PERF-INQ-{Guid.NewGuid():N}",
@@ -34,6 +35,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
 				db.ChangeTracker.Clear();
+				using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
 				var service = GetRequiredService<IAdmissionInquiryAppService>();
 				var result = detail ? await service.GetAsync(inquiryId) :
 					(await service.GetListAsync(new() { AdmissionOfferingId = offering.Id, MaxResultCount = 10 })).Items.Single();
@@ -41,6 +43,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				result.StandardName.ShouldNotBeNullOrWhiteSpace();
 				db.ChangeTracker.Entries<Standard>().ShouldBeEmpty(
 					"Inquiry class names must not recursively hydrate the academic hierarchy.");
+				if (!detail)
+				{
+					result.AdmissionCycleName.ShouldBe(cycleName);
+					result.AdmissionOfferingCode.ShouldBe(offering.Code);
+					var referenceReads = capture.ReadCommands.Count(sql =>
+						sql.Contains("\"AppAdmissionCycles\"", StringComparison.Ordinal) ||
+						sql.Contains("\"AppAdmissionOfferings\"", StringComparison.Ordinal) ||
+						sql.Contains("\"AppAdmissionInquiryManagement\"", StringComparison.Ordinal));
+					Console.WriteLine($"SQLite inquiry page: {referenceReads} reference reads, {capture.ReadCount} total reads.");
+					referenceReads.ShouldBeLessThanOrEqualTo(1, "Page references should share one bounded lookup.");
+				}
 			});
 		});
 

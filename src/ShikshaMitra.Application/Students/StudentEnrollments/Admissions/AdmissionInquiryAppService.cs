@@ -121,40 +121,52 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		var linkedFamilyApplicants = await ReadScopedFamilyApplicantsAsync(rows.Where(row => row.FamilyId.HasValue).Select(row => row.FamilyId!.Value));
 		var possibleSiblingIds = await LazyServiceProvider.LazyGetRequiredService<AdmissionInquirySiblingMatchService>().FindPossibleInquiryIdsAsync(rows);
 
-		var inquiryIds = rows.Select(row => row.Id).ToList();
-		var linkedApplications = (await applicationRepository.GetListAsync(application => application.InquiryId.HasValue && inquiryIds.Contains(application.InquiryId.Value)))
-			.GroupBy(application => application.InquiryId!.Value).ToDictionary(group => group.Key, group => group.OrderByDescending(application => application.CreationTime).First().Id);
-		var managementRows = await managementRepository.GetListAsync(state => inquiryIds.Contains(state.InquiryId));
-		var openFollowUps = await followUpRepository.GetListAsync(followUp =>
-			inquiryIds.Contains(followUp.InquiryId) && followUp.Status == AdmissionInquiryFollowUpStatus.Scheduled);
-		var cycleIds = rows.Select(row => row.AdmissionCycleId).Distinct().ToList();
-		var offeringIds = rows.Where(row => row.AdmissionOfferingId.HasValue)
-			.Select(row => row.AdmissionOfferingId!.Value).Distinct().ToList();
-		var cycleNames = (await cycleRepository.GetListAsync(cycle => cycleIds.Contains(cycle.Id)))
-			.ToDictionary(cycle => cycle.Id, cycle => cycle.Name);
-		var offerings = (await offeringRepository.GetListAsync(offering => offeringIds.Contains(offering.Id)))
-			.ToDictionary(offering => offering.Id);
-		var standardIds = offerings.Values.Select(offering => offering.StandardId).Distinct().ToArray();
+		var inquiryIds = rows.Select(row => row.Id).ToArray();
+		var inquiries = await inquiryRepository.GetQueryableAsync();
+		var management = await managementRepository.GetQueryableAsync();
+		var cycles = await cycleRepository.GetQueryableAsync();
+		var offerings = await offeringRepository.GetQueryableAsync();
 		var yearQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().GetQueryableAsync();
-		var standardNames = (await AsyncExecuter.ToListAsync(AdmissionStandardLabelQuery.ForList(await standardRepository.GetQueryableAsync(), yearQuery)
-			.Where(standard => Enumerable.Contains(standardIds, standard.Id)).Select(standard => new { standard.Id, standard.Name })))
-			.ToDictionary(standard => standard.Id, standard => standard.Name);
-		var managementByInquiry = managementRows.ToDictionary(state => state.InquiryId);
+		var standards = AdmissionStandardLabelQuery.ForList(await standardRepository.GetQueryableAsync(), yearQuery);
+		var references = (await AsyncExecuter.ToListAsync(
+			from inquiry in inquiries
+			where Enumerable.Contains(inquiryIds, inquiry.Id)
+			join state in management on inquiry.Id equals state.InquiryId into managementRows
+			from state in managementRows.DefaultIfEmpty()
+			join cycle in cycles on inquiry.AdmissionCycleId equals cycle.Id into cycleRows
+			from cycle in cycleRows.DefaultIfEmpty()
+			join offering in offerings on inquiry.AdmissionOfferingId equals (Guid?)offering.Id into offeringRows
+			from offering in offeringRows.DefaultIfEmpty()
+			join standard in standards on offering.StandardId equals standard.Id into standardRows
+			from standard in standardRows.DefaultIfEmpty()
+			select new
+			{
+				inquiry.Id,
+				Management = state,
+				CycleName = cycle == null ? null : cycle.Name,
+				OfferingCode = offering == null ? null : offering.Code,
+				StandardId = offering == null ? (Guid?)null : offering.StandardId,
+				StandardName = standard == null ? null : standard.Name
+			})).ToDictionary(row => row.Id);
+		var linkedApplications = (await AsyncExecuter.ToListAsync((await applicationRepository.GetQueryableAsync())
+			.Where(application => application.InquiryId.HasValue && Enumerable.Contains(inquiryIds, application.InquiryId.Value))
+			.Select(application => new { application.Id, application.InquiryId, application.CreationTime })))
+			.GroupBy(application => application.InquiryId!.Value)
+			.ToDictionary(group => group.Key, group => group.OrderByDescending(application => application.CreationTime).First().Id);
+		var openFollowUps = await followUpRepository.GetListAsync(followUp =>
+			Enumerable.Contains(inquiryIds, followUp.InquiryId) && followUp.Status == AdmissionInquiryFollowUpStatus.Scheduled);
 		var followUpsByInquiry = openFollowUps.GroupBy(followUp => followUp.InquiryId)
 			.ToDictionary(group => group.Key, group => group.OrderBy(followUp => followUp.ScheduledAt).ToList());
 
 		return new PagedResultDto<AdmissionInquiryDto>(count, rows.Select(row =>
 		{
-			var offering = row.AdmissionOfferingId.HasValue ? offerings.GetValueOrDefault(row.AdmissionOfferingId.Value) : null;
-			var dto = Map(row,
-			managementByInquiry.GetValueOrDefault(row.Id), followUpsByInquiry.GetValueOrDefault(row.Id) ?? [],
-			cycleNames.GetValueOrDefault(row.AdmissionCycleId),
-			offering?.Code,
-			null,
-				now);
-			dto.StandardId = offering?.StandardId;
-			dto.StandardName = offering != null ? standardNames.GetValueOrDefault(offering.StandardId) : null;
-			dto.ApplicationId = linkedApplications.GetValueOrDefault(row.Id) is var applicationId && applicationId != Guid.Empty ? applicationId : null;
+			var reference = references.GetValueOrDefault(row.Id);
+			var dto = Map(row, reference?.Management, followUpsByInquiry.GetValueOrDefault(row.Id) ?? [],
+				reference?.CycleName, reference?.OfferingCode, now: now);
+			dto.StandardId = reference?.StandardId;
+			dto.StandardName = reference?.StandardName;
+			var applicationId = linkedApplications.GetValueOrDefault(row.Id);
+			dto.ApplicationId = applicationId == Guid.Empty ? null : applicationId;
 			dto.IsTransferred |= dto.ApplicationId.HasValue;
 			dto.HasLinkedSiblings = row.FamilyId.HasValue && linkedFamilyApplicants.TryGetValue(row.FamilyId.Value, out var familyApplicants) && familyApplicants.Any(id => id != row.ApplicantId);
 			dto.HasPossibleSiblingMatch = !dto.IsTransferred && possibleSiblingIds.Contains(row.Id);

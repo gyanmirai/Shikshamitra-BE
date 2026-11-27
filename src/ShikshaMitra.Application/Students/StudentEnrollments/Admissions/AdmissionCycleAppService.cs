@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -44,10 +43,10 @@ public class AdmissionCycleAppService(
 			(!input.Status.HasValue || x.Status == input.Status.Value));
 
 		queryable = ApplyWindowFilter(queryable, input.WindowStatus, today);
+		var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
+		var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
 		if (!string.IsNullOrWhiteSpace(input.ColumnFilters))
 		{
-			var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
-			var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
 			var filterRows = AdmissionCycleColumnFilters.Apply(queryable.Select(cycle => new AdmissionCycleColumnFilterRow
 			{
 				Id = cycle.Id,
@@ -55,18 +54,25 @@ public class AdmissionCycleAppService(
 				StartDate = cycle.StartDate,
 				EndDate = cycle.EndDate,
 				LinkedOfferingCount = scopedOfferings.Count(offering => offering.AdmissionCycleId == cycle.Id),
-				ApplicationCount = scopedApplications.Count(application => application.AdmissionCycleId == cycle.Id &&
-					scopedOfferings.Any(offering => offering.Id == application.AdmissionOfferingId))
+				ApplicationCount = scopedApplications.Count(application => application.AdmissionCycleId == cycle.Id)
 			}), input.ColumnFilters);
 			queryable = queryable.Where(cycle => filterRows.Any(row => row.Id == cycle.Id));
 		}
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
+		var years = await academicYearRepository.GetQueryableAsync();
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(queryable, input.Sorting)
 			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount));
-
-		var context = await LoadMapContextAsync(rows);
-		return new PagedResultDto<AdmissionCycleDto>(totalCount, rows.Select(x => Map(x, context)).ToList());
+			.Take(input.MaxResultCount)
+			.Select(cycle => new
+			{
+				Cycle = cycle,
+				YearName = years.Where(year => year.Id == cycle.AcademicYearId).Select(year => year.Name).FirstOrDefault(),
+				OfferingCount = scopedOfferings.Count(offering => offering.AdmissionCycleId == cycle.Id),
+				ActiveOfferingCount = scopedOfferings.Count(offering => offering.AdmissionCycleId == cycle.Id && offering.IsActive),
+				ApplicationCount = scopedApplications.Count(application => application.AdmissionCycleId == cycle.Id)
+			}));
+		return new PagedResultDto<AdmissionCycleDto>(totalCount, rows.Select(row => Map(row.Cycle,
+			today, row.YearName ?? string.Empty, row.OfferingCount, row.ActiveOfferingCount, row.ApplicationCount)).ToList());
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
@@ -81,10 +87,9 @@ public class AdmissionCycleAppService(
 	{
 		var academicYear = await EnsureAcademicYearExistsAsync(input.AcademicYearId);
 		EnsureWindowDates(input.StartDate, input.EndDate, academicYear: academicYear);
-		await EnsureNameAvailableAsync(input.Name);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", id);
-		await EnsureCodeIsUniqueAsync(code);
+		await EnsureNameAndCodeAvailableAsync(input.Name, code);
 
 		var cycle = new AdmissionCycle(id, CurrentTenant.Id, input.Name, code,
 			input.AcademicYearId, input.StartDate, input.EndDate, input.Description);
@@ -102,9 +107,8 @@ public class AdmissionCycleAppService(
 		EnsureConcurrency(cycle, input.ConcurrencyStamp);
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
 		EnsureWindowDates(input.StartDate, input.EndDate, cycle);
-		await EnsureNameAvailableAsync(input.Name, id);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, cycle.Code);
-		await EnsureCodeIsUniqueAsync(code, id);
+		await EnsureNameAndCodeAvailableAsync(input.Name, code, id);
 		cycle.UpdateDetails(input.Name, code, input.AcademicYearId, input.StartDate, input.EndDate,
 			input.Description);
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
@@ -224,10 +228,9 @@ public class AdmissionCycleAppService(
 	{
 		var source = await GetCycleAsync(input.SourceCycleId);
 		var academicYear = await EnsureAcademicYearExistsAsync(input.AcademicYearId);
-		await EnsureNameAvailableAsync(input.Name);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", cloneId);
-		await EnsureCodeIsUniqueAsync(code);
+		await EnsureNameAndCodeAvailableAsync(input.Name, code);
 		var clone = new AdmissionCycle(cloneId, CurrentTenant.Id, input.Name, code,
 			input.AcademicYearId, input.StartDate, input.EndDate, input.Description ?? source.Description);
 		await cycleRepository.InsertAsync(clone, autoSave: false);
@@ -517,14 +520,8 @@ public class AdmissionCycleAppService(
 		}
 	}
 
-	private AdmissionCycleDto MapNewDraft(AdmissionCycle cycle, AcademicYear academicYear)
-	{
-		var emptyCounts = ReadOnlyDictionary<Guid, int>.Empty;
-		return Map(cycle, new AdmissionCycleMapContext(
-			new Dictionary<Guid, string> { [academicYear.Id] = academicYear.Name },
-			emptyCounts, emptyCounts, emptyCounts,
-			AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now)));
-	}
+	private AdmissionCycleDto MapNewDraft(AdmissionCycle cycle, AcademicYear academicYear) =>
+		Map(cycle, AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now), academicYear.Name, 0, 0, 0);
 
 	private async Task<AdmissionCycleMapContext> LoadMapContextAsync(IReadOnlyCollection<AdmissionCycle> cycles)
 	{
@@ -553,10 +550,16 @@ public class AdmissionCycleAppService(
 			AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now));
 	}
 
-	private static AdmissionCycleDto Map(AdmissionCycle cycle, AdmissionCycleMapContext context)
+	private static AdmissionCycleDto Map(AdmissionCycle cycle, AdmissionCycleMapContext context) =>
+		Map(cycle, context.Today, context.AcademicYears.GetValueOrDefault(cycle.AcademicYearId, string.Empty),
+			context.OfferingCounts.GetValueOrDefault(cycle.Id), context.ActiveOfferingCounts.GetValueOrDefault(cycle.Id),
+			context.ApplicationCounts.GetValueOrDefault(cycle.Id));
+
+	private static AdmissionCycleDto Map(AdmissionCycle cycle, DateTime today, string academicYearName,
+		int offeringCount, int activeOfferingCount, int applicationCount)
 	{
 		var windowStatus = AdmissionCycleWindowEvaluator.EvaluateForDate(cycle.Status, cycle.StartDate,
-			cycle.EndDate, context.Today);
+			cycle.EndDate, today);
 		return new AdmissionCycleDto
 		{
 			ConcurrencyStamp = cycle.ConcurrencyStamp,
@@ -565,7 +568,7 @@ public class AdmissionCycleAppService(
 			Code = cycle.Code,
 			Description = cycle.Description,
 			AcademicYearId = cycle.AcademicYearId,
-			AcademicYearName = context.AcademicYears.GetValueOrDefault(cycle.AcademicYearId, string.Empty),
+			AcademicYearName = academicYearName,
 			StartDate = cycle.StartDate,
 			EndDate = cycle.EndDate,
 			Status = cycle.Status,
@@ -582,9 +585,9 @@ public class AdmissionCycleAppService(
 			ArchivedBy = cycle.ArchivedBy,
 			ScheduledPublishAt = cycle.ScheduledPublishAt,
 			ScheduledCloseAt = cycle.ScheduledCloseAt,
-			LinkedOfferingCount = context.OfferingCounts.GetValueOrDefault(cycle.Id),
-			ActiveOfferingCount = context.ActiveOfferingCounts.GetValueOrDefault(cycle.Id),
-			ApplicationCount = context.ApplicationCounts.GetValueOrDefault(cycle.Id),
+			LinkedOfferingCount = offeringCount,
+			ActiveOfferingCount = activeOfferingCount,
+			ApplicationCount = applicationCount,
 			CreationTime = cycle.CreationTime,
 			CreatorId = cycle.CreatorId,
 			LastModificationTime = cycle.LastModificationTime,
@@ -626,9 +629,10 @@ public class AdmissionCycleAppService(
 		}
 	}
 
-	private async Task EnsureNameAvailableAsync(string name, Guid? excludingId = null)
+	private async Task EnsureNameAndCodeAvailableAsync(string name, string code, Guid? excludingId = null)
 	{
 		var normalizedName = name.Trim().ToUpperInvariant();
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		await LazyServiceProvider.LazyGetRequiredService<IAdmissionCycleNameLock>()
 			.AcquireAsync(CurrentTenant.Id, normalizedName);
 		var query = await cycleRepository.GetQueryableAsync();
@@ -636,7 +640,7 @@ public class AdmissionCycleAppService(
 		var cycles = await AsyncExecuter.ToListAsync(query
 			.Where(cycle => cycle.TenantId == tenantId &&
 				(!excludingId.HasValue || cycle.Id != excludingId.Value))
-			.Select(cycle => new { cycle.Name, cycle.Status }));
+			.Select(cycle => new { cycle.Name, cycle.Status, MatchesCode = cycle.Code == normalizedCode }));
 		// Use the same normalization as the lock, regardless of database collation.
 		var matches = cycles
 			.Where(cycle => cycle.Name.Trim().ToUpperInvariant() == normalizedName)
@@ -648,17 +652,9 @@ public class AdmissionCycleAppService(
 		if (matches.Contains(AdmissionCycleStatus.Archived))
 			throw new BusinessException(AdmissionErrorCodes.ArchivedCycleNameAlreadyExists,
 				"An archived admission cycle with this name already exists. Enter a different name.");
-	}
-
-	private async Task EnsureCodeIsUniqueAsync(string code, Guid? excludingId = null)
-	{
-		var normalized = code.Trim().ToUpperInvariant();
-		var queryable = await cycleRepository.GetQueryableAsync();
-		var exists = await AsyncExecuter.AnyAsync(queryable.Where(x => x.Code == normalized &&
-			(!excludingId.HasValue || x.Id != excludingId.Value)));
-		if (exists)
+		if (cycles.Any(cycle => cycle.MatchesCode))
 		{
-			throw new BusinessException(AdmissionErrorCodes.CycleCodeAlreadyExists).WithData("Code", normalized);
+			throw new BusinessException(AdmissionErrorCodes.CycleCodeAlreadyExists).WithData("Code", normalizedCode);
 		}
 	}
 

@@ -1,8 +1,11 @@
 using System;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Timing;
 using Xunit;
@@ -105,6 +108,82 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 		(await GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(FormLinkInput(offering))).Name
 			.ShouldBe("Form readiness test");
+	});
+
+	[Fact]
+	public Task Public_link_copy_should_load_the_original_token_from_storage_for_its_own_tenant() => RunCertificationScenarioAsync(async () =>
+	{
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var created = await service.CreateLinkAsync(FormLinkInput(await CreateOptionalIntakeOfferingAsync()));
+		var repository = GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>();
+		var stored = await WithUnitOfWorkAsync(() => repository.GetAsync(created.Id));
+		stored.FindProtectedToken().ShouldNotBeNullOrWhiteSpace();
+		stored.FindProtectedToken().ShouldNotBe(created.Token);
+		stored.TokenHash.ShouldNotBe(created.Token);
+		(await service.GetLinksAsync()).ShouldHaveSingleItem().CanCopy.ShouldBeTrue();
+		(await service.GetCopyTokenAsync(created.Id)).Token.ShouldBe(created.Token);
+		using (_currentTenant.Change(Guid.NewGuid()))
+			await Should.ThrowAsync<EntityNotFoundException>(() => service.GetCopyTokenAsync(created.Id));
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Public_link_regeneration_should_replace_a_missing_or_unreadable_token_in_place(bool unreadable) => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var repository = GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>();
+		var oldToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+		var oldHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(oldToken)));
+		var legacy = new AdmissionPublicInquiryLink(Guid.NewGuid(), TestTenantId,
+			offering.AdmissionCycleId, null, "Legacy link", oldHash, AdmissionInquirySource.Website,
+			"School site", null, offering.InquiryFormDefinitionId);
+		if (unreadable) legacy.SetPublicToken(oldHash, "!invalid");
+		await repository.InsertAsync(legacy, autoSave: true);
+		var original = (await service.GetLinksAsync()).ShouldHaveSingleItem();
+		original.CanCopy.ShouldBe(unreadable);
+		(await Should.ThrowAsync<BusinessException>(() => service.GetCopyTokenAsync(legacy.Id)))
+			.Code.ShouldBe("Admissions.PublicInquiry.CopyTokenUnavailable");
+		(await service.GetPublicAsync(oldToken)).AdmissionCycleName.ShouldNotBeNullOrWhiteSpace();
+
+		var input = new RegenerateAdmissionPublicInquiryLinkDto { ConcurrencyStamp = original.ConcurrencyStamp };
+		var updated = await service.RegenerateLinkAsync(legacy.Id, input);
+		updated.Id.ShouldBe(original.Id);
+		updated.Name.ShouldBe(original.Name);
+		updated.InquiryFormDefinitionId.ShouldBe(original.InquiryFormDefinitionId);
+		updated.SourceDetail.ShouldBe(original.SourceDetail);
+		updated.ExpiresAtUtc.ShouldBe(original.ExpiresAtUtc);
+		updated.CanCopy.ShouldBeTrue();
+		var newToken = (await service.GetCopyTokenAsync(legacy.Id)).Token;
+		newToken.ShouldNotBe(oldToken);
+		(await service.GetPublicAsync(newToken)).AdmissionCycleName.ShouldNotBeNullOrWhiteSpace();
+		(await Should.ThrowAsync<BusinessException>(() => service.GetPublicAsync(oldToken)))
+			.Code.ShouldBe("Admissions.PublicInquiry.LinkUnavailable");
+		(await Should.ThrowAsync<BusinessException>(() => service.RegenerateLinkAsync(legacy.Id, input)))
+			.Code.ShouldBe(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+		(await service.GetCopyTokenAsync(legacy.Id)).Token.ShouldBe(newToken);
+		(await service.GetLinksAsync()).ShouldHaveSingleItem().Id.ShouldBe(legacy.Id);
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Public_link_copy_and_regeneration_should_reject_inactive_links(bool expired) => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var repository = GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>();
+		var link = new AdmissionPublicInquiryLink(Guid.NewGuid(), TestTenantId,
+			offering.AdmissionCycleId, null, "Inactive link", "inactive-link-hash", AdmissionInquirySource.Website,
+			null, expired ? GetRequiredService<IClock>().Now.AddMinutes(-1) : null, offering.InquiryFormDefinitionId);
+		if (!expired) link.Revoke();
+		await repository.InsertAsync(link, autoSave: true);
+		(await Should.ThrowAsync<BusinessException>(() => service.GetCopyTokenAsync(link.Id)))
+			.Code.ShouldBe("Admissions.PublicInquiry.LinkUnavailable");
+		(await Should.ThrowAsync<BusinessException>(() => service.RegenerateLinkAsync(link.Id,
+			new RegenerateAdmissionPublicInquiryLinkDto { ConcurrencyStamp = link.ConcurrencyStamp })))
+			.Code.ShouldBe("Admissions.PublicInquiry.LinkUnavailable");
 	});
 
 	[Fact]

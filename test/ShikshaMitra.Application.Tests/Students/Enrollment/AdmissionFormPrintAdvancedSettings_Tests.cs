@@ -10,6 +10,14 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionFormPrintAdvancedSettings_Tests
 {
+	[Fact]
+	public void Instruction_typography_survives_saved_settings()
+	{
+		const string advanced = """{"content":{"instructionHeadingSize":"16","instructionTextSize":"14","instructionTextWeight":"bold","instructionTextColor":"gray"}}""";
+		var form = Form();
+		AdmissionFormMetadataStore.WriteExperience(form, Input(advanced));
+		JsonNode.DeepEquals(Settings(form)["advanced"], JsonNode.Parse(advanced)).ShouldBeTrue();
+	}
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private const string Advanced = """
 		{"paper":{"orientation":"landscape","margins":{"top":10,"right":11,"bottom":12,"left":13}},
@@ -97,6 +105,8 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	[InlineData("{\"fields\":{\"NAME\":{\"answerStyle\":\"html\"}}}")]
 	[InlineData("{\"fields\":{\"NAME\":null}}")]
 	[InlineData("{\"content\":{\"instructionsPlacement\":\"unknown\"}}")]
+	[InlineData("{\"content\":{\"instructionTextSize\":\"100\"}}")]
+	[InlineData("{\"content\":{\"instructionTextWeight\":\"heavy\"}}")]
 	[InlineData("{\"content\":{\"translations\":{\"en\":null}}}")]
 	[InlineData("{\"content\":{\"parentSignatureImage\":\"data:text/plain;base64,AA==\"}}")]
 	[InlineData("{\"content\":{\"officeSignatureImage\":\"data:image/png;base64,not base64!\"}}")]

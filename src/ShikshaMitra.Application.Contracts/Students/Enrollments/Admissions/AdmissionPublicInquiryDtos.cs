@@ -35,12 +35,24 @@ public class AdmissionPublicInquiryLinkDto
 	public string? SourceDetail { get; set; }
 	public DateTime? ExpiresAtUtc { get; set; }
 	public bool IsActive { get; set; }
+	public bool CanCopy { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class AdmissionPublicInquiryLinkCreatedDto : AdmissionPublicInquiryLinkDto
 {
 	public string Token { get; set; } = string.Empty;
+}
+
+public class AdmissionPublicInquiryLinkTokenDto
+{
+	public string Token { get; set; } = string.Empty;
+}
+
+public class RegenerateAdmissionPublicInquiryLinkDto
+{
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class SetAdmissionPublicInquiryLinkFormDto

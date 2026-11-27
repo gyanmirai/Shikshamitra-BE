@@ -24,6 +24,7 @@ public class AdmissionPublicInquiryLinksController(IAdmissionPublicInquiryAppSer
 		Result.Success(await service.GetLinkOptionsAsync(admissionCycleId));
 
 	[HttpPost, Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<Result<AdmissionPublicInquiryLinkCreatedDto>> CreateAsync(
 		[FromBody] CreateAdmissionPublicInquiryLinkDto input) =>
 		Result.Success(await service.CreateLinkAsync(input));
@@ -32,6 +33,20 @@ public class AdmissionPublicInquiryLinksController(IAdmissionPublicInquiryAppSer
 	public async Task<Result<AdmissionPublicInquiryLinkDto>> RenameAsync(Guid id,
 		[FromBody] RenameAdmissionPublicInquiryLinkDto input) =>
 		Result.Success(await service.RenameLinkAsync(id, input));
+
+	[HttpGet("{id:guid}/copy-token")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public async Task<Result<AdmissionPublicInquiryLinkTokenDto>> GetCopyTokenAsync(Guid id) =>
+		Result.Success(await service.GetCopyTokenAsync(id));
+
+	[HttpPost("{id:guid}/regenerate")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	public async Task<Result<AdmissionPublicInquiryLinkDto>> RegenerateAsync(Guid id,
+		[FromBody] RegenerateAdmissionPublicInquiryLinkDto input) =>
+		Result.Success(await service.RegenerateLinkAsync(id, input));
 
 	[HttpPut("{id:guid}/form"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<Result<AdmissionPublicInquiryLinkDto>> SetFormAsync(Guid id,
@@ -64,6 +79,7 @@ public class PublicAdmissionInquiriesController(IAdmissionPublicInquiryAppServic
 		return File(file.Content, file.ContentType);
 	}
 	[HttpGet("{token}")]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public Task<PublicAdmissionInquiryContextDto> GetAsync(string token, [FromQuery] Guid? offeringId = null) =>
 		service.GetPublicAsync(token, offeringId);
 

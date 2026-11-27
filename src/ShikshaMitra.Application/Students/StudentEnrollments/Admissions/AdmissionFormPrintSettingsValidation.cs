@@ -102,6 +102,10 @@ internal static class AdmissionFormPrintSettingsValidation
 			SignatureImage(content.OfficeSignatureImage, "office signature");
 			Choice(content.InstructionsPlacement, "instructions placement", "first", "section", "before-declaration", "separate-page");
 			Text(content.InstructionSection, 128, "instructions section");
+			Choice(content.InstructionHeadingSize, "instruction heading size", "default", "10", "12", "14", "16");
+			Choice(content.InstructionTextSize, "instruction text size", "default", "10", "12", "14", "16");
+			Choice(content.InstructionTextWeight, "instruction text weight", "regular", "bold");
+			Choice(content.InstructionTextColor, "instruction text color", "default", "black", "gray");
 			Choice(content.ChecklistPlacement, "checklist placement", "first", "last", "separate-page");
 			Choice(content.SignaturePlacement, "signature placement", "last", "separate-page");
 			Choice(content.OfficePlacement, "office-use placement", "last", "separate-page");

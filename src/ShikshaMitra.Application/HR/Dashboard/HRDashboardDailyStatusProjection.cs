@@ -47,19 +47,30 @@ internal static class HRDashboardDailyStatusProjection
 		return (isWorkingDay.HasValue ? HRDashboardDailyStatus.NotMarked : HRDashboardDailyStatus.NeedsSetup, flags);
 	}
 
-	internal static HRDashboardDailyCountsDto Count(string date, IReadOnlyCollection<HRDashboardStaffDto> rows) => new()
+	internal static HRDashboardDailyCountsDto Count(string date, IReadOnlyCollection<HRDashboardStaffDto> rows) =>
+		Count(date, rows.Select(x => (x.Status, x.ReviewFlags.Count > 0)));
+
+	internal static HRDashboardDailyCountsDto Count(
+		string date, IEnumerable<(HRDashboardDailyStatus Status, bool NeedsReview)> rows)
 	{
-		Date = date,
-		StaffCount = rows.Count,
-		Present = rows.Count(x => x.Status == HRDashboardDailyStatus.Present),
-		Absent = rows.Count(x => x.Status == HRDashboardDailyStatus.Absent),
-		OnLeave = rows.Count(x => x.Status == HRDashboardDailyStatus.OnLeave),
-		HalfDay = rows.Count(x => x.Status == HRDashboardDailyStatus.HalfDay),
-		NotMarked = rows.Count(x => x.Status == HRDashboardDailyStatus.NotMarked),
-		NotScheduled = rows.Count(x => x.Status == HRDashboardDailyStatus.NotScheduled),
-		NeedsSetup = rows.Count(x => x.Status == HRDashboardDailyStatus.NeedsSetup),
-		NeedsReview = rows.Count(x => x.ReviewFlags.Count > 0)
-	};
+		var counts = new HRDashboardDailyCountsDto { Date = date };
+		foreach (var (status, needsReview) in rows)
+		{
+			counts.StaffCount++;
+			if (needsReview) counts.NeedsReview++;
+			switch (status)
+			{
+				case HRDashboardDailyStatus.Present: counts.Present++; break;
+				case HRDashboardDailyStatus.Absent: counts.Absent++; break;
+				case HRDashboardDailyStatus.OnLeave: counts.OnLeave++; break;
+				case HRDashboardDailyStatus.HalfDay: counts.HalfDay++; break;
+				case HRDashboardDailyStatus.NotMarked: counts.NotMarked++; break;
+				case HRDashboardDailyStatus.NotScheduled: counts.NotScheduled++; break;
+				case HRDashboardDailyStatus.NeedsSetup: counts.NeedsSetup++; break;
+			}
+		}
+		return counts;
+	}
 
 	internal static HRDashboardStaffPageDto Page(
 		List<HRDashboardStaffDto> rows, HRDashboardStaffInput input, string date, DateTimeOffset generatedAt)

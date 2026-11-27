@@ -27,15 +27,8 @@ public class HRDashboardOperationalStaffReader(
 	internal async Task<DashboardStaffPopulation> LoadPopulationAsync(
 		HRDashboardOverviewInput input, UserScopeContext scope, DateOnly start, DateOnly end)
 	{
-		var query = await scopeQuery.BuildScopedEmployeeQueryAsync(scope, new HrEmployeeScopeOptions
-		{
-			ActiveOnOrAfter = start,
-			JoinedOnOrBefore = end,
-			TreatNullStatusAsActive = true,
-			EducationMediumStageId = input.EducationMediumStageId
-		});
 		// Filter choices come from the authorized population, before user-selected filters.
-		var all = await executer.ToListAsync(query);
+		var all = await LoadEmployeesAsync(scope, start, end, stageId: input.EducationMediumStageId);
 		var stageIdsByEmployee = await scopeQuery.BuildEmployeeStageLookupAsync(all.Select(x => x.Id));
 		var allowedStages = HrUserScopeAccess.HasHrWideAccess(scope)
 			? stageIdsByEmployee.Values.SelectMany(x => x).Distinct().ToList()
@@ -64,13 +57,54 @@ public class HRDashboardOperationalStaffReader(
 		return new(employees, options, stageIdsByEmployee, stageNames, shifts.ToDictionary(x => x.Id, x => x.ShiftName));
 	}
 
+	internal async Task<List<Employee>> LoadEmployeesAsync(
+		UserScopeContext scope, DateOnly start, DateOnly end, Guid? academicYearId = null, Guid? stageId = null)
+	{
+		var query = await scopeQuery.BuildScopedEmployeeQueryAsync(scope, new HrEmployeeScopeOptions
+		{
+			ActiveOnOrAfter = start,
+			JoinedOnOrBefore = end,
+			TreatNullStatusAsActive = true,
+			AcademicYearId = academicYearId,
+			EducationMediumStageId = stageId
+		});
+		return await executer.ToListAsync(query);
+	}
+
 	internal async Task<Dictionary<DateOnly, List<HRDashboardStaffDto>>> ReadDaysAsync(
 		DashboardStaffPopulation population, List<DateOnly> dates)
 	{
-		var employees = population.Employees;
+		var days = await ReadClassifiedDaysAsync(dates.ToDictionary(date => date, _ => population.Employees));
+		var shifts = (await shiftResolver.LoadAsync(population.Employees.Select(x => x.Id), dates[0], dates[^1]))
+			.ToLookup(x => x.EmployeeId);
+		return days.ToDictionary(pair => pair.Key, pair => pair.Value.Select(day => new HRDashboardStaffDto
+		{
+			EmployeeId = day.Employee.Id,
+			Name = StaffName(day.Employee),
+			EmployeeCode = day.Employee.EmployeeCode ?? "",
+			IsTeaching = day.Employee.EmployeeGroup == EmployeeGroupType.Teaching,
+			Department = day.Employee.Department,
+			Stages = population.StageIds.GetValueOrDefault(day.Employee.Id, []).Where(population.StageNames.ContainsKey)
+				.Select(x => new HRDashboardOptionDto { Id = x, Name = population.StageNames[x] }).ToList(),
+			ShiftName = shifts[day.Employee.Id].SingleOrDefault(x => x.Covers(pair.Key))?.ShiftName,
+			Status = day.Status,
+			ApprovedLeaveCoverage = day.LeaveCoverage,
+			Source = day.Record?.Source.ToString(),
+			TimeIn = day.Record?.TimeIn,
+			TimeOut = day.Record?.TimeOut,
+			ReviewFlags = day.Flags
+		}).ToList());
+	}
+
+	internal async Task<Dictionary<DateOnly, List<DashboardAttendanceDay>>> ReadClassifiedDaysAsync(
+		Dictionary<DateOnly, List<Employee>> employeesByDate)
+	{
+		var dates = employeesByDate.Keys.Order().ToList();
+		var employees = employeesByDate.Values.SelectMany(x => x).DistinctBy(x => x.Id).ToList();
+		if (employees.Count == 0) return dates.ToDictionary(date => date, _ => new List<DashboardAttendanceDay>());
 		var ids = employees.Select(x => x.Id).ToList();
-		var start = dates.First();
-		var end = dates.Last();
+		var start = dates[0];
+		var end = dates[^1];
 		var attendanceQuery = await attendanceRepository.GetQueryableAsync();
 		var attendance = await executer.ToListAsync(attendanceQuery.Where(x => ids.Contains(x.EmployeeId) &&
 			x.AttendanceDate >= start && x.AttendanceDate <= end));
@@ -84,12 +118,11 @@ public class HRDashboardOperationalStaffReader(
 			.Select(x => new { x.EmployeeId, x.StartDateOnly, x.EndDateOnly, x.HalfDay }));
 		var leaveLookup = leaves.ToLookup(x => x.EmployeeId);
 		var calendars = await calendarReader.ReadAsync(employees, dates);
-		var assignments = await shiftResolver.LoadAsync(ids, start, end);
-		var result = new Dictionary<DateOnly, List<HRDashboardStaffDto>>();
+		var result = new Dictionary<DateOnly, List<DashboardAttendanceDay>>();
 		foreach (var date in dates)
 		{
-			var rows = new List<HRDashboardStaffDto>();
-			foreach (var employee in employees.Where(x => IsEligible(x, date)))
+			var rows = new List<DashboardAttendanceDay>();
+			foreach (var employee in employeesByDate[date].Where(x => IsEligible(x, date)))
 			{
 				attendanceLookup.TryGetValue((employee.Id, date), out var recorded);
 				var calendar = calendars.GetValueOrDefault((employee.Id, date), new(null, null));
@@ -101,33 +134,26 @@ public class HRDashboardOperationalStaffReader(
 				var (status, flags) = HRDashboardDailyStatusProjection.Classify(recorded?.StatusType, fullLeave, halfLeave, calendar.IsWorkingDay, incomplete);
 				if (conflictingDays.Contains((employee.Id, date)))
 					flags.Add(new(HRDashboardReviewFlagCode.ConflictingAttendanceRecords, "Attendance records disagree for this date."));
-				rows.Add(new HRDashboardStaffDto
-				{
-					EmployeeId = employee.Id,
-					Name = string.Join(" ", new[] { employee.FirstName, employee.MiddleName, employee.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
-					EmployeeCode = employee.EmployeeCode ?? "",
-					IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-					Department = employee.Department,
-					Stages = population.StageIds.GetValueOrDefault(employee.Id, []).Where(population.StageNames.ContainsKey)
-						.Select(x => new HRDashboardOptionDto { Id = x, Name = population.StageNames[x] }).ToList(),
-					ShiftName = assignments.SingleOrDefault(x => x.EmployeeId == employee.Id && x.Covers(date))?.ShiftName,
-					Status = status,
-					ApprovedLeaveCoverage = fullLeave ? HRDashboardLeaveCoverage.FullDay : halfLeave ? HRDashboardLeaveCoverage.HalfDay : null,
-					Source = recorded?.Source.ToString(),
-					TimeIn = recorded?.TimeIn,
-					TimeOut = recorded?.TimeOut,
-					ReviewFlags = flags
-				});
+				rows.Add(new(employee, recorded, status,
+					fullLeave ? HRDashboardLeaveCoverage.FullDay : halfLeave ? HRDashboardLeaveCoverage.HalfDay : null, flags));
 			}
 			result[date] = rows;
 		}
 		return result;
 	}
 
+	internal static string StaffName(Employee employee) =>
+		string.Join(" ", new[] { employee.FirstName, employee.MiddleName, employee.LastName }
+			.Where(x => !string.IsNullOrWhiteSpace(x)));
+
 	internal static bool IsEligible(Employee employee, DateOnly date) =>
 		(employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime)) <= date &&
 		EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(employee.EmployeeStatusType, employee.StatusEffectiveDate, date);
 }
+
+internal sealed record DashboardAttendanceDay(
+	Employee Employee, EmployeeAttendance? Record, HRDashboardDailyStatus Status,
+	HRDashboardLeaveCoverage? LeaveCoverage, List<HRDashboardReviewFlagDto> Flags);
 
 internal sealed record DashboardStaffPopulation(
 	List<Employee> Employees, HRDashboardFilterOptionsDto Filters,

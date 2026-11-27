@@ -1,4 +1,6 @@
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Dashboard;
@@ -26,7 +28,9 @@ public class HRDashboardPreviewProjectionService : ITransientDependency
 			DashboardKey = preview.DashboardKey,
 			ScopeKey = preview.ScopeKey,
 			Status = preview.Status,
-			PayloadJson = preview.PayloadJson,
+			PayloadJson = preview.DashboardKey == HrDashboardKeys.Attendance
+				? RemoveLegacyAttendanceIdentities(preview.PayloadJson)
+				: preview.PayloadJson,
 			PayloadVersion = preview.PayloadVersion,
 			IsStale = !preview.LastRefreshedAt.HasValue || now - preview.LastRefreshedAt.Value > PreviewStaleAfter,
 			LastRefreshedAt = preview.LastRefreshedAt,
@@ -36,4 +40,18 @@ public class HRDashboardPreviewProjectionService : ITransientDependency
 			RefreshRequestedByUserId = preview.RefreshRequestedByUserId,
 			LastError = preview.LastError
 		};
+
+	private static string RemoveLegacyAttendanceIdentities(string payload)
+	{
+		try
+		{
+			if (JsonNode.Parse(payload) is not JsonObject attendance) return "{}";
+			if (attendance.ContainsKey("topDefaulters")) attendance["topDefaulters"] = new JsonArray();
+			return attendance.ToJsonString();
+		}
+		catch (JsonException)
+		{
+			return "{}";
+		}
+	}
 }

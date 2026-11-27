@@ -3,6 +3,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
@@ -59,6 +61,48 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var error = await Should.ThrowAsync<BusinessException>(() => service.CreateLinkAsync(duplicateInput));
 		error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryLinkNameExists);
 		(await service.GetLinksAsync()).ShouldHaveSingleItem().Id.ShouldBe(saved.Id);
+	});
+
+	[Fact]
+	public Task Public_link_list_should_preserve_the_saved_form_name_after_archive() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var created = await service.CreateLinkAsync(FormLinkInput(offering));
+		var formRepository = GetRequiredService<IRepository<AdmissionFormDefinition, Guid>>();
+		var form = await formRepository.GetAsync(offering.InquiryFormDefinitionId!.Value);
+		form.Archive();
+		await formRepository.UpdateAsync(form, true);
+
+		var listedLink = (await service.GetLinksAsync()).ShouldHaveSingleItem();
+		listedLink.Id.ShouldBe(created.Id);
+		listedLink.AdmissionCycleName.ShouldBe((await _cycleRepository.GetAsync(offering.AdmissionCycleId)).Name);
+		listedLink.InquiryFormName.ShouldBe(form.Name);
+	});
+
+	[Fact]
+	public Task Public_link_period_names_follow_the_viewers_academic_year_scope() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var visibleCycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var visibleLink = await service.CreateLinkAsync(FormLinkInput(offering));
+		var otherYear = await GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(
+			new AcademicYear(Guid.NewGuid(), TestTenantId, "Other inquiry link year", new DateTime(2035, 4, 1), new DateTime(2036, 3, 31)), true);
+		var otherCycle = await _cycleRepository.InsertAsync(new AdmissionCycle(Guid.NewGuid(), TestTenantId,
+			"Other inquiry link period", "OTHER-INQUIRY-LINK-PERIOD", otherYear.Id, otherYear.StartDate, otherYear.EndDate), true);
+		var otherLink = await GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>().InsertAsync(
+			new AdmissionPublicInquiryLink(Guid.NewGuid(), TestTenantId, otherCycle.Id, null,
+				"Other year link", new string('F', 64), AdmissionInquirySource.Website, null, null), true);
+		var viewerId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(viewerId, $"link-year-reader-{viewerId:N}");
+		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
+			userId: viewerId, academicYearId: visibleCycle.AcademicYearId), true);
+
+		using var principal = _principalAccessor.Change(ProfilePrincipal(viewerId));
+		var listedLinks = await service.GetLinksAsync();
+		listedLinks.Single(link => link.Id == visibleLink.Id).AdmissionCycleName.ShouldBe(visibleCycle.Name);
+		listedLinks.Single(link => link.Id == otherLink.Id).AdmissionCycleName.ShouldBe(string.Empty);
 	});
 
 	[Fact]

@@ -1,6 +1,7 @@
 ﻿  <Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
+  <Import Project="MigrationModelDeduplication.targets" />
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -12,7 +13,7 @@
        Keep the migration sources and analyzers intact while limiting compiler concurrency. -->
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <UseSharedCompilation>false</UseSharedCompilation>
-    <CompilerResponseFile Condition="'$(CompilerResponseFile)' == ''">$(MSBuildThisFileDirectory)../../scripts/local/backend-compiler.rsp</CompilerResponseFile>
+    <CompilerResponseFile Condition="'$(CompilerResponseFile)' == ''">$(MSBuildThisFileDirectory)ci-compiler-options.txt</CompilerResponseFile>
     <CscEnvironment>$(CscEnvironment);DOTNET_PROCESSOR_COUNT=1;DOTNET_GCConserveMemory=9;DOTNET_gcServer=0</CscEnvironment>
   </PropertyGroup>
 

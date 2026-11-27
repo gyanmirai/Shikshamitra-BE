@@ -25,7 +25,7 @@ public class LibraryFinanceSourceScope(IRepository<LibraryCharge, Guid> charges,
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		var chargeQuery = (await charges.GetQueryableAsync()).Where(row => row.TenantId == tenant.Id);
-		var empty = chargeQuery.Where(_ => false).Select(row => new FinanceExternalReadableSource { SourceId = row.Id });
+		var empty = LibraryAssessmentSourceScopeQuery.NoReadableSources(chargeQuery);
 		if (kind != FinanceExternalSourceKind.LibraryAssessment || !tenant.Id.HasValue || !user.Id.HasValue ||
 			!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Library.Charges.View)) return empty;
 		var scope = await scopeAccess.GetCurrentUserScopeAsync();

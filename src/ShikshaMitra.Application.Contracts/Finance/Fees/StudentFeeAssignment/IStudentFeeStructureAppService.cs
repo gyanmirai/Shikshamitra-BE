@@ -10,6 +10,8 @@ public interface IStudentFeeStructureAppService : IApplicationService
 {
 	Task<List<AssignmentContextDto>> GetContextsAsync(AssignmentContextsInput input);
 	Task<AssignmentHistoryPage> GetHistoryAsync(Guid studentId, AssignmentHistoryRequest input);
+	Task<VariableFeeChangeResult> PreviewVariableFeeChangeAsync(Guid studentId, VariableFeeChangeInput input);
+	Task<VariableFeeChangeResult> CommitVariableFeeChangeAsync(Guid studentId, VariableFeeChangeInput input);
 	Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId);
 	Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, AssignmentPolicyUpdateDto input);
 	Task<OptionalServiceStopResult> PreviewOptionalServiceStopAsync(Guid studentId, OptionalServiceStopInput input);

@@ -38,6 +38,15 @@ public partial class StudentFeeStructureAppService
 				row.StudentId == studentId && row.EntityId == assignment.Id && row.EntityType == FinanceAuditEntityTypes.FeeAdjustment &&
 				(row.Action == OptionalServiceStopped || row.Action == OptionalServiceRestarted || row.Action == OptionalServiceEnabled));
 
+		var feeChanges = await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceAuditEvent, Guid>>()
+			.GetListAsync(row => row.TenantId == CurrentTenant.Id && row.AcademicYearId == input.AcademicYearId &&
+				row.StudentId == studentId && row.EntityId == assignment.Id && row.EntityType == FinanceAuditEntityTypes.FeeAdjustment &&
+				row.Action == VariableFeeChanged);
+		var earliestChange = feeChanges.MinBy(row => row.OccurredAt);
+		if (corrections.Count == 0 && earliestChange != null &&
+			ReadAssignmentHistory<VariableFeeChangeEvidence>(earliestChange.ContextJson, ref incomplete, OptionalServiceAuditJson) is { } oldest)
+			original = ReadAssignmentHistory<StudentFeeAssignmentPreviewDto>(oldest.BeforeSnapshotJson, ref incomplete);
+
 		var serviceRestarts = serviceLog.Where(row => row.Action != OptionalServiceStopped).ToDictionary(row => row.Id,
 			row => ReadAssignmentHistory<OptionalServiceRestartEvidence>(row.ContextJson, ref incomplete, OptionalServiceAuditJson));
 		var versionIds = policyChanges.SelectMany(change => change.Before.VersionIds().Concat(change.After.VersionIds()))
@@ -77,6 +86,17 @@ public partial class StudentFeeStructureAppService
 			var details = change.Before.Entries().Where(item => item.Id != after[item.Family]).Select(item =>
 				new AssignmentHistoryChange($"{item.Family} policy", PolicyName(item.Id), PolicyName(after[item.Family]), null)).ToList();
 			activity.Add(new($"policies-{i}", "Assigned policies changed", change.OccurredAt, change.ActorId, null, change.Reason, details));
+		}
+		foreach (var row in feeChanges)
+		{
+			var change = ReadAssignmentHistory<VariableFeeChangeEvidence>(row.ContextJson, ref incomplete, OptionalServiceAuditJson);
+			if (change == null) continue;
+			var before = ReadAssignmentHistory<StudentFeeAssignmentPreviewDto>(change.BeforeSnapshotJson, ref incomplete);
+			var after = ReadAssignmentHistory<StudentFeeAssignmentPreviewDto>(change.AfterSnapshotJson, ref incomplete);
+			var details = HistoryDiff(DescribeAssignment(before), DescribeAssignment(after));
+			details.Insert(0, new("Effective date", null, FormatHistoryDate(change.EffectiveDate), "date"));
+			activity.Add(new(row.Id.ToString(), "Variable fee changed", UtcTimestamp(row.OccurredAt),
+				row.ActorUserId, row.ActorNameSnapshot, row.Reason, details));
 		}
 		foreach (var row in serviceLog)
 		{

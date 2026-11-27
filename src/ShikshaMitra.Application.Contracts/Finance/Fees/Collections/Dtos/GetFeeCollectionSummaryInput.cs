@@ -15,6 +15,8 @@ public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto, IFin
     public string? Filters { get; set; }
     public string? SortBy { get; set; }
     public string? SortOrder { get; set; }
+	/// <summary>Return one row per enrolled Student Records entry in the selected academic placement.</summary>
+	public bool StudentRecordsOnly { get; set; }
 	/// <summary>Maximum page size cap.</summary>
 	public const int MaxPageSize = 100;
 

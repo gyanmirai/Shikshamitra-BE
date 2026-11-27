@@ -144,6 +144,19 @@ public class DueFeeManager(
 		return dues;
 	}
 
+	public List<DueFee> GenerateVariableFeeChangeDues(StudentFeeStructure assignment,
+		FeeStructureDetail detail, ResolvedFeeHeadSchedule schedule, decimal monthlyRate,
+		ProrationPolicySnapshot? policy, Guid? policyVersionId, DateTime start, DateTime end, AcademicYear year)
+	{
+		if (!detail.IsVariable || detail.IsOneTime || !schedule.IsValid)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		ValidateChargePeriod(start, end, year, detail.FeeHeadId);
+		var dues = GenerateFromSchedule(assignment.StudentId, detail, schedule, monthlyRate, monthlyRate,
+			policy, policyVersionId, start, end, year, assignment.FinanceFeeAccountId);
+		foreach (var due in dues) due.BindAssignment(assignment.Id);
+		return dues;
+	}
+
 	private List<DueFee> GenerateFromSchedule(Guid? studentId, FeeStructureDetail detail, ResolvedFeeHeadSchedule schedule,
 		decimal annualAmount, decimal? monthlyRate, ProrationPolicySnapshot? prorationPolicy, Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate, DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId,

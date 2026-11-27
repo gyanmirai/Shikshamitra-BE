@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -10,6 +11,8 @@ public interface ICashReadQueries
 	Task<CashBalanceFacts> SummarizeAsync(IQueryable<CashCollection> query);
 	Task<CashActivityFacts> SummarizeActivityAsync(IQueryable<CashCollection> query, DateTimeOffset? start, DateTimeOffset? end);
 	Task<IQueryable<CashCollection>> FilterCollectionPeriodAsync(IQueryable<CashCollection> query, DateTimeOffset start, DateTimeOffset end);
+	Task<(IReadOnlyList<CashExpenseFact> Items, int TotalCount)> ReadExpensesAsync(IQueryable<CashCollection> query,
+		DateTimeOffset? start, DateTimeOffset? end, int skip, int take);
 }
 
 public sealed class CashBalanceFacts
@@ -24,3 +27,4 @@ public sealed class CashBalanceFacts
 }
 
 public sealed record CashActivityFacts(decimal Collected, decimal Spent, decimal Deposited);
+public sealed record CashExpenseFact(Guid Id, string Name, decimal Amount, DateTimeOffset PaymentDate, string SourceReference);

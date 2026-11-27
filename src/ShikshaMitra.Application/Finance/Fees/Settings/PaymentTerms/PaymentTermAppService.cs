@@ -517,15 +517,16 @@ public partial class PaymentTermAppService(
 		};
 	}
 
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task ArchiveAsync(Guid paymentTermId, ArchivePaymentTermDto input)
 	{
+		if (!await referenceLock.AcquireAsync([paymentTermId]))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", paymentTermId);
+
 		var term = await GetTermWithVersionsAsync(paymentTermId);
-		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
-		if (referenceCount > 0)
-		{
-			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
-				.WithData("ReferencedStructureCount", referenceCount);
-		}
+		if (term.Status == PaymentTermStatus.Archived)
+			return;
+
 		term.Archive(input.Reason);
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 	}

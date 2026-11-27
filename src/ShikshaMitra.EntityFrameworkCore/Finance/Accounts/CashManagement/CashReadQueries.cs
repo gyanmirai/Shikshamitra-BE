@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,26 @@ public sealed class CashReadQueries(IDbContextProvider<ShikshaMitraDbContext> co
 			expenses = expenses.Where(x => x.PaymentDate >= start.Value && x.PaymentDate < end.Value);
 		return new CashActivityFacts(await collections.SumAsync(x => x.Amount), await expenses.SumAsync(x => x.Amount),
 			await CreditAmountsQuery(query, start, end).SumAsync());
+	}
+
+	public async Task<(IReadOnlyList<CashExpenseFact> Items, int TotalCount)> ReadExpensesAsync(
+		IQueryable<CashCollection> query, DateTimeOffset? start, DateTimeOffset? end, int skip, int take)
+	{
+		var expenses = query.SelectMany(cash => cash.Expenses, (cash, expense) =>
+			new { expense.Id, expense.Name, expense.Amount, expense.PaymentDate, cash.Reference });
+		if ((await contexts.GetDbContextAsync()).Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+		{
+			var rows = (await expenses.ToListAsync()).Where(x =>
+				!start.HasValue || x.PaymentDate >= start.Value && x.PaymentDate < end!.Value).ToList();
+			return (rows.OrderByDescending(x => x.PaymentDate).ThenBy(x => x.Id).Skip(skip).Take(take)
+				.Select(x => new CashExpenseFact(x.Id, x.Name, x.Amount, x.PaymentDate, x.Reference)).ToList(), rows.Count);
+		}
+		if (start.HasValue && end.HasValue)
+			expenses = expenses.Where(x => x.PaymentDate >= start.Value && x.PaymentDate < end.Value);
+		var count = await expenses.CountAsync();
+		var page = await expenses.OrderByDescending(x => x.PaymentDate).ThenBy(x => x.Id).Skip(skip).Take(take)
+			.Select(x => new CashExpenseFact(x.Id, x.Name, x.Amount, x.PaymentDate, x.Reference)).ToListAsync();
+		return (page, count);
 	}
 
 	private static async Task<CashActivityFacts> SummarizeSqliteActivityAsync(IQueryable<CashCollection> query, DateTimeOffset? start, DateTimeOffset? end)

@@ -82,7 +82,14 @@ public partial class StudentFeeDetailsQueryService(
 			{
 				if (account.StudentFeeStructureId.HasValue)
 					throw new BusinessException(AdmissionFeeCollectionErrorCodes.AssignmentConflict);
-				return await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>().GetCollectFormAsync(account.ApplicationId);
+				var form = await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>()
+					.GetCollectFormAsync(account.ApplicationId);
+				var studentInfo = BuildStudentInfo(student);
+				studentInfo.FinanceFeeAccountId = account.Id;
+				studentInfo.FeeStructureName = form.Student.FeeStructureName;
+				studentInfo.IsFeeStructureAssigned = true;
+				form.Student = studentInfo;
+				return form;
 			}
 		}
 
@@ -338,6 +345,9 @@ public partial class StudentFeeDetailsQueryService(
 					SourceId = c.Id,
 					SourceType = "Charge",
 					IsSystemGenerated = false,
+					DueDate = c.SchoolDueDate ?? (c.DueDate is { } dueDate
+						? DateOnly.FromDateTime(dueDate.ToOffset(TimeSpan.FromMinutes(330)).DateTime)
+						: null),
 					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 					Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(net),
 					PaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(paid),
@@ -357,6 +367,8 @@ public partial class StudentFeeDetailsQueryService(
 			}));
 		}
 
+		feeSummary.RefundedAmount = await ReadCompletedRefundAmountAsync(academicYearId, studentId,
+			accountId: null, cancellationToken);
 		return CollectionAllocationContext.Apply(new FeeCollectFormDto
 		{
 			Student = BuildStudentInfo(student),
@@ -365,6 +377,22 @@ public partial class StudentFeeDetailsQueryService(
 			Charges = chargeDtos,
 			AllowOnlineCollection = allowOnlineCollection,
 		}, allocationPolicy, feeHeadOrder);
+	}
+
+	internal async Task<decimal> ReadCompletedRefundAmountAsync(Guid academicYearId, Guid? studentId, Guid? accountId,
+		CancellationToken cancellationToken = default)
+	{
+		var refunds = (await feeRefundRepository.GetQueryableAsync()).Where(refund =>
+			refund.TenantId == CurrentTenant.Id && refund.AcademicYearId == academicYearId &&
+			(refund.Status == FeeRefundStatus.Processed ||
+			 (refund.Status == FeeRefundStatus.Approved && refund.RefundPolicyVersionId == null &&
+			  refund.ConcessionRequestId == null && refund.WorkflowVersion == 0)));
+		refunds = accountId.HasValue
+			? refunds.Where(refund => refund.FinanceFeeAccountId == accountId)
+			: refunds.Where(refund => refund.StudentId == studentId);
+		return await AsyncExecuter.SumAsync(refunds.Select(refund =>
+			(refund.RefundPolicyVersionId == null && refund.ProcessedAmount == 0m
+				? refund.TotalAmount : refund.ProcessedAmount) - refund.ReversedAmount), cancellationToken);
 	}
 
 	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)

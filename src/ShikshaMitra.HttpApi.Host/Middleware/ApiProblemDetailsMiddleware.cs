@@ -87,7 +87,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 	private static bool IsProblemDetailsContentType(string? contentType)
 	{
 		return !string.IsNullOrWhiteSpace(contentType) &&
-		       contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase);
+			   contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private ProblemDetails MapException(HttpContext context, Exception exception)

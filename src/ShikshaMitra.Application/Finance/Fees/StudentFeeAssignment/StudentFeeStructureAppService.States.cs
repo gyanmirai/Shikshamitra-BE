@@ -41,7 +41,10 @@ public partial class StudentFeeStructureAppService
 			{
 				row.AssignmentId = assignment.Id;
 				row.StructureId = assignment.FeeStructureStandardId;
-				row.StructureRevision = SavedAssignment(assignment)?.RevisionNumber;
+				var snapshot = SavedAssignment(assignment);
+				row.StructureRevision = snapshot?.RevisionNumber;
+				row.CanChangeVariableFees = row.IsActive && snapshot != null &&
+					snapshot.Heads.Any(head => SupportsVariableFeeChange(assignment, head, snapshot));
 				row.AssignmentConcurrencyStamp = assignment.ConcurrencyStamp;
 				row.StructureEditBlocker = editBlockers[assignment.Id] ?? (!row.IsActive ? InactiveEditBlocker : null);
 				row.CanEditStructure = row.StructureEditBlocker == null;

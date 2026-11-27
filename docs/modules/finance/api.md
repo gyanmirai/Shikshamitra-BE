@@ -97,6 +97,16 @@ are separate. Sorting, numeric filters and summary exports consume the full pend
 The mobile overview retains its generated-bill `pendingFee` and separate future partition
 described below; staff pending semantics do not change that contract.
 
+### Active Student Records roster
+
+`GET /api/fee-collections` and its export accept optional `studentRecordsOnly=true`.
+The roster includes one row per active student in the selected academic placement and applies
+Finance user scope before sorting, counting and paging. It includes the student's authorized
+linked-account balances on the same row. Applicant-only accounts remain available through
+the Admission collection workflow and in mixed-payer API responses.
+Both the roster and collect form prefer the Student Records GR number and use the legacy
+numeric GR when the current value is missing.
+
 ### Staff collection charge balances
 
 Summary rows add decimal `paidCharges` for active collected additional-charge payments, including late fees and payments awaiting verification. Reversed payments and waivers do not contribute to paid amounts. `totalCharges` is net of applied waivers; `pendingCharges` deducts active payments from that net amount and clamps each source balance to zero. Waivers are deducted once. Sorting, numeric table filters and CSV/XLSX exports use these same server projections; exports place Paid Charges between Total Charges and Pending Charges. Tenant, academic-year and academic scope remain unchanged.
@@ -114,6 +124,8 @@ Failed requests do not contribute because their reservations are released; a
 replacement contributes only after its own approval. Approval alone changes
 neither paid refunds nor the installment's paid/outstanding balance. Queries
 retain tenant filters and restrict pending requests to the student and academic year.
+The collect form also exposes decimal `summary.refundedAmount` for the selected payer and
+academic year. It totals completed payouts across fee and charge sources, net of reversals.
 
 ## Fee structure copy policy preflight
 
@@ -437,6 +449,8 @@ Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.
 Authenticated requests to `/api/account-heads`, including former options and CRUD routes, return HTTP 410. Category head lookups return empty options for authorized category editors. Income and Expense Category requests accept name, description, optional tags, and concurrency stamps; they do not require or accept a new Account Head mapping. Internal codes are generated on create and existing historical metadata is preserved.
 
+Creating an Income or Expense Category requires an `academicYearId` query parameter. An omitted or empty GUID returns HTTP 400 for callers with the Add permission. The tenant and academic-year scope checks apply to the supplied year.
+
 Income and Expense Category names are case-insensitively unique within the tenant, academic year, and category type. Deleting an unused category releases its name and retains the deleted record for audit. Inactive categories still reserve their name until deleted. Income Categories, Expense Categories and Bank Accounts must be deactivated before deletion. Referenced records remain protected. Duplicate names and policy or dependency blocks return a conflict with a user-facing reason.
 
 Bank Accounts require school bank details, year/scope, uniqueness, and concurrency checks. They no longer require an Asset Account Head. Refer to [Income, expense, and bank routing](./references/income-expense-routing.md) for the required charge, policy, collection, and refund fields and the workflow-owned options endpoint.
@@ -515,6 +529,7 @@ See [Income and expense routing](./references/income-expense-routing.md) for the
 ## Separate Income and Expenses registers
 
 GET `/api/accounts/register` accepts direction=income|expense, academicYearId, optional month/year/categoryId/source/search and page/pageSize.
+Expense queries also accept an optional `paymentMethod` using the shared payment method enum. The filter applies to recorded payments and refund postings before the row count and pagination.
 GET `/api/accounts/register/{source}/{id}` accepts academicYearId and enforces the matching Accounts View permission plus year/student scope.
 POST `/api/incomes` and `/api/expenses` accept optional bankAccountId, counterparty, paymentReference and UUID idempotencyKey alongside the existing manual fields.
 Financial routing lookups add income-entry and expense-entry operations using the exact owning Add grant.

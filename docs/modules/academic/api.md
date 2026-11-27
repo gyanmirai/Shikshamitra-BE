@@ -183,6 +183,8 @@ An eligible learner needs a current enrolled placement, a visible published subj
 
 Confirmed saves through `PUT /api/class-management/class-teacher-assignments` can queue `Academic.ClassTeacher.Assigned`, `Academic.ClassTeacher.Replaced` or `Academic.ClassTeacher.Removed`. The source ID is the affected division. The save transaction records the confirmed teacher and its notification revision on that division. Draft saves preserve the last confirmed identity and queue no notices. Reconfirming the same teacher preserves the revision even when the assignment row is recreated.
 
+The save resolves the academic year, board, medium, and stage from the selected organization in the current tenant. Confirming an existing assignment records these values for its exact class and division. Saving a draft preserves the scope of any retained active assignment until confirmation.
+
 The rule can select the current or outgoing teacher where applicable. Each recipient must still have the saved active school account linked to an active teaching employee. The outgoing teacher receives generic content. The configured reviewer under `Notifications:Academic:Tenants:<tenantIdN>:ClassTeacherReviewerUserId` must have Class Teacher Assignment View and Add and scope for the division. A newer confirmed change or a conflicting live assignment suppresses pending work.
 
 History requires Academic Notification View, Class Teacher Assignment View and the division scope. Teachers open the authenticated school inbox. The older assignment endpoint remains outside this notification workflow.

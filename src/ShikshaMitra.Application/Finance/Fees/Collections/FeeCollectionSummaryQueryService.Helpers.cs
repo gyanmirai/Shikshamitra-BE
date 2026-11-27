@@ -136,10 +136,12 @@ public partial class FeeCollectionSummaryQueryService
 	{
 		var studentQ = await studentRepository.GetQueryableAsync();
 		var currentScopedIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		var historicalIds = await financeScopeAccessService.GetScopedFeeCollectionEnrollmentIdsQueryAsync(
-			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId,
-			input.DivisionId, cancellationToken);
-		var privileged = IsPrivilegedUser();
+		var historicalIds = input.StudentRecordsOnly
+			? studentQ.Where(_ => false).Select(student => student.Id)
+			: await financeScopeAccessService.GetScopedFeeCollectionEnrollmentIdsQueryAsync(
+				input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId,
+				input.DivisionId, cancellationToken);
+		var privileged = !input.StudentRecordsOnly && IsPrivilegedUser();
 		studentQ = studentQ.Where(s =>
 			(s.AcademicYearId == input.AcademicYearId && s.AcademicBoardId == input.BoardId &&
 			 s.AcademicMediumId == input.EducationMediumId &&
@@ -162,6 +164,7 @@ public partial class FeeCollectionSummaryQueryService
 					(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
 					(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
 					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)) ||
+					(s.GrNumber   != null && s.GrNumber.ToLower().Contains(term)) ||
 					(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 			}
 			else if (terms.Length > 1)
@@ -173,6 +176,7 @@ public partial class FeeCollectionSummaryQueryService
 						(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
 						(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
 						(s.LastName   != null && s.LastName.ToLower().Contains(term)) ||
+						(s.GrNumber   != null && s.GrNumber.ToLower().Contains(term)) ||
 						(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 				}
 			}
@@ -190,8 +194,11 @@ public partial class FeeCollectionSummaryQueryService
 			input.AcademicYearId);
 		var query = (await accountRepository.GetQueryableAsync()).Where(a =>
 			accountIds.Contains(a.Id) && a.AcademicYearId == input.AcademicYearId &&
-			a.BoardId == input.BoardId && a.EducationMediumId == input.EducationMediumId &&
 			a.StructureId.HasValue);
+		if (input.StudentRecordsOnly)
+			return query.Where(a => a.StudentId.HasValue && matchingStudentIds.Contains(a.StudentId.Value));
+
+		query = query.Where(a => a.BoardId == input.BoardId && a.EducationMediumId == input.EducationMediumId);
 		if (input.StandardId.HasValue) query = query.Where(a => a.StandardId == input.StandardId.Value);
 		if (input.DivisionId.HasValue) query = query.Where(a => a.DivisionId == input.DivisionId.Value);
 		if (!string.IsNullOrWhiteSpace(input.Search))

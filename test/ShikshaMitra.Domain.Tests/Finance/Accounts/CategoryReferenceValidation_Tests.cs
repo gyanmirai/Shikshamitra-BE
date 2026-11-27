@@ -43,6 +43,32 @@ public class CategoryReferenceValidation_Tests
 	}
 
 	[Fact]
+	public async Task An_Archived_Charge_Category_Can_Only_Be_Retained_By_An_Existing_Request()
+	{
+		var yearId = Guid.NewGuid();
+		var category = new ChargeCategory(Guid.NewGuid(), null, yearId, "Retired charge category",
+			isApprovalRequired: true, description: null, isActive: false);
+		var categories = Substitute.For<IRepository<ChargeCategory, Guid>>();
+		categories.FindAsync(category.Id, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(category);
+		var manager = new ChargeRequestManager(Substitute.For<IRepository<ChargeRequest, Guid>>(),
+			Substitute.For<IRepository<Charge, Guid>>(), Substitute.For<IStudentRepository>(), categories,
+			null!, Substitute.For<ITransactionCategoryReferenceLock>(), null!,
+			Substitute.For<IGuidGenerator>(), NullLogger<ChargeRequestManager>.Instance);
+		var request = new ChargeRequest(Guid.NewGuid(), null, yearId, "Charge", category.Id,
+			"Purpose", 10m, DateTimeOffset.UtcNow.AddDays(1), (ChargePriority)0, Guid.NewGuid(),
+			Guid.NewGuid(), Guid.NewGuid(), "{}");
+		var incomeCategoryId = Guid.NewGuid();
+		request.SetIncomeCategory(incomeCategoryId, "Saved income category");
+
+		await manager.SetIncomeCategoryFromChargeCategoryAsync(request, category.Id);
+		request.IncomeCategoryId.ShouldBe(incomeCategoryId);
+		request.IncomeCategoryName.ShouldBe("Saved income category");
+		var error = await Should.ThrowAsync<BusinessException>(
+			() => manager.SetIncomeCategoryFromChargeCategoryAsync(request, Guid.NewGuid()));
+		error.Code.ShouldBe(FinanceChargeErrorCodes.ChargeCategoryInactive);
+	}
+
+	[Fact]
 	public async Task A_new_reference_waits_for_the_transaction_lock_before_reading_the_category()
 	{
 		var categories = Substitute.For<IRepository<TransactionCategory, Guid>>();

@@ -20,6 +20,9 @@ public enum FeeCollectionExportFormat
 /// </summary>
 public class FeeCollectionExportRequestDto
 {
+	/// <summary>Use the enrolled Student Records roster for the exported rows.</summary>
+	public bool StudentRecordsOnly { get; set; }
+
 	/// <summary>Academic year to scope results to (required).</summary>
 	[Required]
 	public Guid AcademicYearId { get; set; }

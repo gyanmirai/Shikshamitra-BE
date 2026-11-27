@@ -27,6 +27,14 @@ public class StudentFeeStructureController(
 	public Task<AssignmentHistoryPage> GetHistoryAsync(Guid studentId, [FromQuery] AssignmentHistoryRequest input) =>
 		studentFeeStructureAppService.GetHistoryAsync(studentId, input);
 
+	[HttpPost("student/{studentId}/variable-fee-change/preview")]
+	public Task<VariableFeeChangeResult> PreviewVariableFeeChangeAsync(Guid studentId, [FromBody] VariableFeeChangeInput input) =>
+		studentFeeStructureAppService.PreviewVariableFeeChangeAsync(studentId, input);
+
+	[HttpPost("student/{studentId}/variable-fee-change")]
+	public Task<VariableFeeChangeResult> CommitVariableFeeChangeAsync(Guid studentId, [FromBody] VariableFeeChangeInput input) =>
+		studentFeeStructureAppService.CommitVariableFeeChangeAsync(studentId, input);
+
 	[HttpPut("student/{studentId}/policies")]
 	public Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, [FromBody] AssignmentPolicyUpdateDto input) => studentFeeStructureAppService.UpdatePoliciesAsync(studentId, input);
 	[HttpPost("student/{studentId}/optional-service-stop/preview")]

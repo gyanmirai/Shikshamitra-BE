@@ -234,6 +234,61 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 	}
 
 	[Fact]
+	public async Task Used_Category_Can_Be_Archived_And_Restored_Without_Changing_Assigned_Heads()
+	{
+		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+		var input = await ReadyAssignmentAsync();
+		var assignments = GetRequiredService<IStudentFeeStructureAppService>();
+		input.PreviewToken = (await assignments.PreviewAsync(input)).PreviewToken;
+		await assignments.AssignAsync(input);
+		var original = await assignments.GetByStudentIdAsync(input.StudentId, input.AcademicYearId);
+		var headId = original.FeeHeads.Single().FeeHeadId;
+		var heads = GetRequiredService<IFeeHeadAppService>();
+		var head = await heads.GetByIdAsync(headId);
+		var inactiveHead = new FeeHead(Guid.NewGuid(), TestTenantId, input.AcademicYearId, head.FeeCategoryId,
+			"Individually retired head", null, false, null, head.IncomeCategoryId);
+		inactiveHead.SetActiveStatus(false, "Inactive before the category was archived");
+		await GetRequiredService<IRepository<FeeHead, Guid>>().InsertAsync(inactiveHead, autoSave: true);
+		var categories = GetRequiredService<IFeeCategoryAppService>();
+		var archived = await categories.UpdateStatusAsync(head.FeeCategoryId,
+			new Dtos.FeeCategoryStatusUpdateRequest { IsActive = false, DeactivationReason = "Retire from new setup" });
+
+		archived.IsActive.ShouldBeFalse();
+		archived.IsUsedInDownstream.ShouldBeTrue();
+		archived.FeeHeads.Single(x => x.Id == headId).IsActive.ShouldBeTrue();
+		archived.FeeHeads.Single(x => x.Id == inactiveHead.Id).IsActive.ShouldBeFalse();
+		(await heads.GetActiveAsync(input.AcademicYearId)).ShouldNotContain(x => x.Id == headId);
+		(await categories.GetOptionsAsync(input.AcademicYearId)).ShouldNotContain(x => x.Id == archived.Id);
+		(await categories.GetOptionsAsync(input.AcademicYearId, archived.Id)).ShouldContain(x => x.Id == archived.Id);
+		var resolved = await assignments.GetByStudentIdAsync(input.StudentId, input.AcademicYearId);
+		resolved.FeeHeads.Single().FeeHeadId.ShouldBe(headId);
+		resolved.Assignment!.ProratedTotal.ShouldBe(original.Assignment!.ProratedTotal);
+		var students = GetRequiredService<IRepository<Student, Guid>>();
+		var firstStudent = await students.GetAsync(input.StudentId);
+		var nextStudent = new Student(Guid.NewGuid(), TestTenantId, "Next", null, "Student", input.AcademicYearId,
+			firstStudent.AcademicBoardId!.Value, firstStudent.AcademicMediumId, firstStudent.AcademicMediumStageId!.Value,
+			firstStudent.StandardId, status: StudentLifeCycleStatusEnum.Enrolled);
+		await students.InsertAsync(nextStudent, autoSave: true);
+		var nextAssignment = new AssignStudentFeeStructureDto
+		{
+			StudentId = nextStudent.Id,
+			AcademicYearId = input.AcademicYearId,
+			StandardFeeStructureId = input.StandardFeeStructureId
+		};
+		nextAssignment.PreviewToken = (await assignments.PreviewAsync(nextAssignment)).PreviewToken;
+		await assignments.AssignAsync(nextAssignment);
+		(await assignments.GetByStudentIdAsync(nextStudent.Id, input.AcademicYearId)).FeeHeads
+			.Single().FeeHeadId.ShouldBe(headId);
+		var deletion = await Should.ThrowAsync<BusinessException>(() => categories.DeleteAsync(archived.Id));
+		deletion.Code.ShouldBe(FinanceFeeCategoryErrorCodes.CannotDeleteInUse);
+
+		var restored = await categories.UpdateStatusAsync(archived.Id, new Dtos.FeeCategoryStatusUpdateRequest { IsActive = true });
+		restored.IsActive.ShouldBeTrue();
+		restored.FeeHeads.Single(x => x.Id == inactiveHead.Id).IsActive.ShouldBeFalse();
+		(await heads.GetActiveAsync(input.AcademicYearId)).ShouldContain(x => x.Id == headId);
+	}
+
+	[Fact]
 	public async Task Assignment_Bulk_Commits_All_Six_Previews_For_The_Same_Structure_And_Retry_Is_Idempotent()
 	{
 		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);

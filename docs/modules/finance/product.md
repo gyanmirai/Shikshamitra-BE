@@ -72,7 +72,9 @@ documents resolve to their official replacements without duplicating documents.
 
 ## Archived Fee Categories
 
-Fee Heads under an archived Fee Category are read-only. Status changes require restoring the category first; active-head choices for new assignments exclude archived categories. Existing published Fee Structure references remain intact.
+Archiving a Fee Category preserves its Fee Heads and their individual statuses. Existing Fee Structure lines retain their Fee Head references, and active-head choices for new setup exclude archived categories. A Fee Head's status can be changed after restoring its category.
+
+Payment Terms, Concession Types, and Charge Categories can also be archived while referenced. Existing schedules, concession requests and charges retain their saved references. Only active items are eligible for new setup selections.
 
 ## Payment Term invoice scheduling
 

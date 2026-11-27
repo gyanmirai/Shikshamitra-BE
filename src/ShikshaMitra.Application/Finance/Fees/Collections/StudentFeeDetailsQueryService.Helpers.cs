@@ -94,7 +94,7 @@ public partial class StudentFeeDetailsQueryService
 			EducationMediumName = student.AcademicMedium == null ? string.Empty : student.AcademicMedium.Name,
 			StandardId = student.StandardId, StandardName = student.Standard == null ? string.Empty : student.Standard.Name,
 			DivisionId = student.DivisionId, DivisionName = student.Division == null ? string.Empty : student.Division.Name,
-			GrNo = student.GrNo, RollNo = student.RollNo,
+			GrNumber = student.GrNumber, GrNo = student.GrNo, RollNo = student.RollNo,
 			ContactNo = student.ContactDetail == null ? string.Empty : student.ContactDetail.PrimaryContactNo ?? string.Empty,
 			Email = student.ContactDetail == null ? string.Empty : student.ContactDetail.Email ?? string.Empty,
 			FeeStructureId = student.FeeStructureId,
@@ -149,7 +149,7 @@ public partial class StudentFeeDetailsQueryService
 	{
 		StudentId = student.Id,
 		StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
-		GrNo = student.GrNo?.ToString() ?? string.Empty,
+		GrNo = student.DisplayGrNumber,
 		RollNo = student.RollNo?.ToString() ?? string.Empty,
 		BoardId = student.AcademicBoardId ?? Guid.Empty,
 		BoardName = student.BoardType?.ToString() ?? string.Empty,
@@ -165,7 +165,7 @@ public partial class StudentFeeDetailsQueryService
 	{
 		Id = student.Id,
 		Name = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
-		GrNo = student.GrNo?.ToString() ?? string.Empty,
+		GrNo = student.DisplayGrNumber,
 		StandardName = student.StandardName, DivisionName = student.DivisionName,
 		RollNo = student.RollNo?.ToString() ?? string.Empty,
 		MobileNo = string.IsNullOrWhiteSpace(student.ContactNo) ? null : student.ContactNo,
@@ -211,7 +211,9 @@ public partial class StudentFeeDetailsQueryService
 		public string StandardName { get; set; } = string.Empty;
 		public Guid? DivisionId { get; set; }
 		public string DivisionName { get; set; } = string.Empty;
+		public string? GrNumber { get; init; }
 		public int? GrNo { get; init; }
+		public string DisplayGrNumber => string.IsNullOrWhiteSpace(GrNumber) ? GrNo?.ToString() ?? string.Empty : GrNumber;
 		public int? RollNo { get; set; }
 		public string ContactNo { get; init; } = string.Empty;
 		public string Email { get; init; } = string.Empty;

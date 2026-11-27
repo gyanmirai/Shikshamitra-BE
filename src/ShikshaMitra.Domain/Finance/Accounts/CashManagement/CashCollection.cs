@@ -86,21 +86,26 @@ public class CashCollection : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (amount > RemainingAmount) throw new BusinessException(CashManagementErrorCodes.InsufficientCash);
 		RecordSpend(allocationId, name, amount, paymentDate);
 	}
-	public void DepositRemaining(Guid actor, Guid bankId, string bankLabel, DateTimeOffset at, string? notes)
+	public void DepositRemaining(Guid actor, Guid bankId, string bankLabel, DateTimeOffset at, string? notes) =>
+		DepositAvailable(actor, bankId, bankLabel, RemainingAmount, at, notes);
+
+	public CashDepositRecord DepositAvailable(Guid actor, Guid bankId, string bankLabel, decimal amount, DateTimeOffset at, string? notes)
 	{
-		EnsureMoney(RemainingAmount);
-		if (Status == 0)
+		EnsureMoney(amount);
+		if (amount > RemainingAmount) throw new BusinessException(CashManagementErrorCodes.InsufficientCash);
+		if (Status == 0 && amount == RemainingAmount)
 		{
-			Approve(actor, bankId, bankLabel, RemainingAmount, at, notes, allowSelfApproval: true);
-			return;
+			Approve(actor, bankId, bankLabel, amount, at, notes, allowSelfApproval: true);
+			return Deposits.Last();
 		}
 		if (actor == Guid.Empty || bankId == Guid.Empty || at == default || at < CollectedAt)
 			throw new BusinessException(CashManagementErrorCodes.InvalidEvidence);
 		var label = Evidence(bankLabel, 500);
-		var amount = RemainingAmount;
-		var deposit = new CashDepositRecord(Guid.NewGuid(), actor, amount, at, Reference, OptionalNotes(notes));
-		deposit.Credit(actor, amount, at, Reference, OptionalNotes(notes));
+		var cleanNotes = OptionalNotes(notes);
+		var deposit = new CashDepositRecord(Guid.NewGuid(), actor, amount, at, Reference, cleanNotes);
+		deposit.Credit(actor, amount, at, Reference, cleanNotes);
 		Deposits.Add(deposit); DepositedAmount += amount; BankAccountId = bankId; BankLabel = label;
+		return deposit;
 	}
 	private void RecordSpend(Guid transactionId, string name, decimal amount, DateTimeOffset paymentDate)
 	{

@@ -40,6 +40,8 @@ public partial class AccountsActivityAppService
         var income = input.Direction == "income";
         if (!income && input.Direction != "expense") throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
         await CheckWorkspacePermissionAsync(income);
+        if (input.PaymentMethod is { } method && (income || !Enum.IsDefined(method)))
+            throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
         var source = input.Source?.Trim().ToLowerInvariant();
         if (source != null && (income ? source is not ("income" or "collection") : source is not ("expense" or "refund")))
             throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
@@ -71,6 +73,11 @@ public partial class AccountsActivityAppService
         // Suppress receipt/refund fallbacks using ALL routing evidence, including None.
         var automatic = transactions.Where(x => x.SourceKey != null);
         transactions = AccountsRecognitionQuery.ExcludeNone(transactions, categories);
+        if (input.PaymentMethod is { } selectedMethod)
+        {
+            var paymentMethodValue = (int)selectedMethod;
+            transactions = transactions.Where(transaction => transaction.PaymentMethod == paymentMethodValue);
+        }
         var parties = await evidenceQuery.PartiesAsync(CurrentTenant.Id, input.AcademicYearId);
         var queries = new List<IQueryable<WorkspaceRecord>>();
         var historicalRows = new List<WorkspaceRecord>();
@@ -125,6 +132,17 @@ public partial class AccountsActivityAppService
         {
             var refunds = AccountsRecognitionQuery.ExcludeNone(await refundRepository.GetQueryableAsync(), categories);
             var entries = await refundEntryRepository.GetQueryableAsync();
+            if (input.PaymentMethod is { } refundMethod)
+            {
+                // Older entries record the refund method as a code or its display label.
+                var methods = refundMethod switch
+                {
+                    PaymentMethodEnum.DemandDraft => new[] { "demanddraft", "demand draft (dd)" },
+                    PaymentMethodEnum.BankTransfer => new[] { "banktransfer", "bank transfer (neft/rtgs/imps)" },
+                    _ => new[] { refundMethod.ToString().ToLowerInvariant() }
+                };
+                entries = entries.Where(entry => Enumerable.Contains(methods, entry.Method.ToLower()));
+            }
             var times = await evidenceQuery.RefundTimesAsync(CurrentTenant.Id, input.AcademicYearId);
             if (times != null)
             {

@@ -154,6 +154,7 @@ public partial class ChargeCategoryAppService(
 	[UnitOfWork(isTransactional: true)]
 	public async Task<ChargeCategoryResponse> UpdateStatusAsync(Guid id, UpdateChargeCategoryStatusRequest input)
 	{
+		await referenceLock.AcquireAsync();
 		var category = await chargeCategoryRepository.GetAsync(id);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(category.AcademicYearId, null, null, null, null);
 		if (!input.IsActive && string.IsNullOrWhiteSpace(input.Reason))

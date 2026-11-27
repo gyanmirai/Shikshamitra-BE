@@ -38,10 +38,14 @@ public partial class FeeStructureAppService
 			result.Errors.Add("A Fee Head can appear only once in a structure.");
 		var ids = candidate.FeeHeads.Select(x => x.FeeHeadId).Distinct().ToList();
 		var heads = await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id));
-		if (heads.Count != ids.Count || heads.Any(x => x.AcademicYearId != metadata.AcademicYearId || !x.IsActive))
+		var previousLines = current?.FeeStructureDetails.ToDictionary(x => x.Id);
+		var headsById = heads.ToDictionary(x => x.Id);
+		if (heads.Count != ids.Count || heads.Any(x => x.AcademicYearId != metadata.AcademicYearId || !x.IsActive) ||
+			candidate.FeeHeads.Any(line => headsById.GetValueOrDefault(line.FeeHeadId)?.FeeCategory is { IsActive: false } &&
+				(!line.Id.HasValue || previousLines?.GetValueOrDefault(line.Id.Value)?.FeeHeadId != line.FeeHeadId)))
 			result.Errors.Add("Select active Fee Heads from this academic year.");
 		foreach (var line in candidate.FeeHeads.Where(x => x.Id.HasValue))
-			if (current == null || !current.FeeStructureDetails.Any(x => x.Id == line.Id && x.FeeHeadId == line.FeeHeadId))
+			if (previousLines?.GetValueOrDefault(line.Id!.Value)?.FeeHeadId != line.FeeHeadId)
 				result.Errors.Add("A Fee Head line no longer belongs to this draft. Refresh the structure.");
 		var board = await GetBoardCalendarAsync(metadata.AcademicBoardId!.Value);
 		var year = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
@@ -49,7 +53,6 @@ public partial class FeeStructureAppService
 		var terms = termIds.Length == 0 ? new Dictionary<Guid, PaymentTerm>() :
 			(await paymentTermRepository.GetListAsync(x => Enumerable.Contains(termIds, x.Id))).ToDictionary(x => x.Id);
 		var accountingValidity = new Dictionary<Guid, bool>();
-		var headsById = heads.ToDictionary(x => x.Id);
 		foreach (var line in candidate.FeeHeads)
 		{
 			var head = headsById.GetValueOrDefault(line.FeeHeadId);
@@ -75,12 +78,13 @@ public partial class FeeStructureAppService
 			{
 				var term = terms.GetValueOrDefault(line.PaymentTermId.Value);
 				var version = term?.Versions.SingleOrDefault(x => x.Id == line.PaymentTermVersionId);
-				if (term == null || term.Status != PaymentTermStatus.Active || term.AcademicYearId != year.Id || term.BoardId != board.Id ||
-					version == null || version.Status is not (PaymentTermVersionStatus.Published or PaymentTermVersionStatus.Superseded))
-					throw new BusinessException(FeeStructureErrorCodes.VersionMismatch);
-				var previousLine = current?.FeeStructureDetails.SingleOrDefault(x => x.Id == line.Id);
-				if (version.Status != PaymentTermVersionStatus.Published &&
-					(previousLine?.PaymentTermId != line.PaymentTermId || previousLine?.PaymentTermVersionId != line.PaymentTermVersionId))
+				var previousLine = line.Id.HasValue ? previousLines?.GetValueOrDefault(line.Id.Value) : null;
+				var retainedSchedule = previousLine != null && previousLine.FeeHeadId == line.FeeHeadId &&
+					previousLine.PaymentTermId == line.PaymentTermId &&
+					previousLine.PaymentTermVersionId == line.PaymentTermVersionId;
+				if (term == null || term.AcademicYearId != year.Id || term.BoardId != board.Id ||
+					version == null || version.Status is not (PaymentTermVersionStatus.Published or PaymentTermVersionStatus.Superseded) ||
+					(!retainedSchedule && (term.Status != PaymentTermStatus.Active || version.Status != PaymentTermVersionStatus.Published)))
 					throw new BusinessException(FeeStructureErrorCodes.VersionMismatch);
 				if (line.ScheduleMode == ScheduleMode.Inherited && line.InstallmentOverrides.Count > 0 ||
 					line.ScheduleMode == ScheduleMode.Customized && line.InstallmentOverrides.Count == 0 ||

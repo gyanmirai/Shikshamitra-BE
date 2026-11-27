@@ -15,6 +15,7 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.CashManagement;
 public class CashManagementController(ICashManagementAppService service) : AbpController
 {
 	[HttpGet] public Task<CashPage> GetListAsync([FromQuery] CashQuery input) => service.GetListAsync(input);
+	[HttpGet("expenses")] public Task<CashExpensePage> GetExpensesAsync([FromQuery] CashQuery input) => service.GetExpensesAsync(input);
 	[HttpPost("bulk-deposit"), RequestSizeLimit(6 * 1024 * 1024)]
 	public async Task<CashBulkDepositResult> BulkDepositAsync([FromForm] CashBulkDepositForm input)
 	{
@@ -28,7 +29,7 @@ public class CashManagementController(ICashManagementAppService service) : AbpCo
 			content = stream.ToArray();
 		}
 		return await service.BulkDepositAsync(new CashBulkDeposit { AcademicYearId = input.AcademicYearId,
-			BankAccountId = input.BankAccountId, ExpectedAmount = input.ExpectedAmount, IdempotencyKey = input.IdempotencyKey,
+			BankAccountId = input.BankAccountId, ExpectedAmount = input.ExpectedAmount, Amount = input.Amount, IdempotencyKey = input.IdempotencyKey,
 			Notes = input.Notes, FileName = input.File?.FileName, FileContent = content });
 	}
 	[HttpGet("options")] public Task<CashOptions> GetOptionsAsync([FromQuery] Guid academicYearId, [FromQuery] string operation) => service.GetOptionsAsync(academicYearId, operation);
@@ -49,6 +50,7 @@ public class CashBulkDepositForm
 	public Guid AcademicYearId { get; set; }
 	public Guid BankAccountId { get; set; }
 	public decimal ExpectedAmount { get; set; }
+	public decimal? Amount { get; set; }
 	public Guid IdempotencyKey { get; set; }
 	public string? Notes { get; set; }
 	[DisableAuditing] public IFormFile? File { get; set; }

@@ -16,6 +16,7 @@ using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
@@ -46,6 +47,59 @@ namespace ShikshaMitra.Finance.FeeStructureAssignment;
 public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string BaseUrl = "/api/student-fee-structure";
+
+	[Fact]
+	public async Task Variable_Fee_Change_Preserves_Earlier_Dues_And_Reprices_Future_Collection()
+	{
+		var (input, heads) = await CreateAssignmentFixtureAsync(true, true, false, true, true);
+		input.SelectedOptionalFeeHeadIds = [heads[2]];
+		input.VariableFeeHeads = [new() { FeeHeadId = heads[2], Amount = 300m, IsMonthlyRate = true }];
+		var original = await PreviewAndAssignAsync(input);
+		var originalLines = original.Assignment.Lines.Where(line => line.FeeHeadId == heads[2]).OrderBy(line => line.Sequence).ToList();
+		var now = Factory.Services.GetRequiredService<IClock>().Now.Date;
+		var firstFuture = originalLines.First(line => line.CoverageStartDate >= now && line.CoverageStartDate!.Value.Day == 1);
+		var retained = originalLines.Last(line => line.Sequence < firstFuture.Sequence);
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+		{
+			var repository = scope.ServiceProvider.GetRequiredService<IRepository<DueFee, Guid>>();
+			var due = await repository.GetAsync(retained.DueFeeId!.Value);
+			due.ApplyPayment(100m);
+			await repository.UpdateAsync(due, autoSave: false);
+			await uow.CompleteAsync();
+		}
+		var detailsUrl = $"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}";
+		var current = await GetAndReadAsync<StudentFeeStructureResponseDto>(detailsUrl);
+		current.CanEditStructure.ShouldBeFalse();
+		current.Assignment!.Heads.Single(head => head.FeeHeadId == heads[2]).CanChangeVariableFee.ShouldBeTrue();
+		var route = $"{BaseUrl}/student/{input.StudentId}/variable-fee-change";
+		// Keep one covered month at the new amount and end the service before the next month.
+		var newEnd = firstFuture.CoverageEndDate!.Value;
+		var change = new VariableFeeChangeInput(input.AcademicYearId, heads[2], Guid.NewGuid(),
+			current.ConcurrencyStamp, DateOnly.FromDateTime(firstFuture.CoverageStartDate!.Value),
+			DateOnly.FromDateTime(newEnd), 500m, "Change the future service rate and end date");
+		var quote = await PostAndReadAsync<VariableFeeChangeResult>(route + "/preview", change);
+		quote.PreviousAmount.ShouldBe(quote.PreviousInstallments.Count * 300m);
+		quote.NewAmount.ShouldBe(500m);
+		var reviewed = change with { PreviewToken = quote.PreviewToken };
+		var saved = await PostAndReadAsync<VariableFeeChangeResult>(route, reviewed);
+		var retry = await PostAndReadAsync<VariableFeeChangeResult>(route, reviewed);
+		retry.NewInstallments.Select(line => line.DueFeeId).ShouldBe(saved.NewInstallments.Select(line => line.DueFeeId));
+		var updated = await GetAndReadAsync<StudentFeeStructureResponseDto>(detailsUrl);
+		var prior = updated.Assignment!.Lines.Single(line => line.DueFeeId == retained.DueFeeId);
+		prior.ProratedAmount.ShouldBe(300m);
+		prior.PaidAmount.ShouldBe(100m);
+		updated.Assignment.Heads.Single(head => head.FeeHeadId == heads[2]).ServicePeriod!.EndDate!.Value.Date.ShouldBe(newEnd.Date);
+		var ledger = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
+		var feeRows = ledger.Ledger.SelectMany(month => month.Items).Where(line => line.FeeHeadId == heads[2]).ToList();
+		feeRows.Single(line => line.DueFeeId == retained.DueFeeId).Total.ShouldBe(300d);
+		feeRows.Any(line => quote.PreviousInstallments.Any(old => old.DueFeeId == line.DueFeeId)).ShouldBeFalse();
+		foreach (var replacement in saved.NewInstallments)
+			feeRows.Single(line => line.DueFeeId == replacement.DueFeeId).Total.ShouldBe(500d);
+		var history = await GetAndReadAsync<AssignmentHistoryPage>($"{BaseUrl}/student/{input.StudentId}/history?academicYearId={input.AcademicYearId}");
+		history.Items.Count(entry => entry.Action == "Variable fee changed").ShouldBe(1);
+	}
 
 	[Theory]
 	[InlineData("Finance.Fees.StructureAssign.View")]
@@ -94,8 +148,12 @@ public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory 
 
 	// Enrollment is a synthetic prerequisite, not a call to the removed registration API.
 	// Publication, preview, assignment and collection reads use real HTTP endpoints.
-	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false,
+	private Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false,
 		bool useCurrentAcademicContext = false, bool withRefundPolicy = false, bool variableOptionalHead = false)
+		=> CreateAssignmentFixtureAsync(optionalHeads, useCurrentAcademicContext, withRefundPolicy, variableOptionalHead, false);
+
+	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateAssignmentFixtureAsync(bool optionalHeads,
+		bool useCurrentAcademicContext, bool withRefundPolicy, bool variableOptionalHead, bool monthlySchedule)
 	{
 		var heads = new Guid[optionalHeads ? 3 : 1];
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -159,8 +217,24 @@ public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory 
 				$"T-{Guid.NewGuid():N}"[..16], null, false, HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, InitialDemandStatus.Draft);
 			var version = new PaymentTermVersion(Guid.NewGuid(), tenantId, term.Id, 1, PaymentTermVersionStatus.Draft,
 				HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, null, null);
-			version.SetInstallments([new PaymentTermInstallment(Guid.NewGuid(), version.Id, 1, "Annual",
-				year.StartDate, year.EndDate, year.StartDate, year.StartDate, 100m, true, false)]);
+			if (monthlySchedule)
+			{
+				var first = new DateTime(year.StartDate.Year, year.StartDate.Month, 1);
+				var count = (year.EndDate.Year - first.Year) * 12 + year.EndDate.Month - first.Month + 1;
+				var allocation = decimal.Floor(10000m / count) / 100m;
+				version.SetInstallments(Enumerable.Range(0, count).Select(i =>
+				{
+					var month = first.AddMonths(i);
+					var start = month < year.StartDate.Date ? year.StartDate.Date : month;
+					var last = month.AddMonths(1).AddDays(-1);
+					var end = last > year.EndDate.Date ? year.EndDate.Date : last;
+					return new PaymentTermInstallment(Guid.NewGuid(), version.Id, i + 1, month.ToString("MMM yyyy"),
+						start, end, start, end, i < count - 1 ? allocation : 100m - allocation * (count - 1), true, false);
+				}).ToArray());
+			}
+			else
+				version.SetInstallments([new PaymentTermInstallment(Guid.NewGuid(), version.Id, 1, "Annual",
+					year.StartDate, year.EndDate, year.StartDate, year.StartDate, 100m, true, false)]);
 			version.Publish(year.StartDate, userId);
 			term.AddVersion(version);
 			await provider.GetRequiredService<IRepository<PaymentTerm, Guid>>().InsertAsync(term, autoSave: true);
@@ -175,6 +249,22 @@ public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory 
 				LateFeeType = "PerDay", PercentageBase = "OutstandingAmount", CompoundFrequency = "Daily", RoundingMethod = "None"
 			});
 			candidate.CollectionPolicyId = policy.Id;
+			if (monthlySchedule)
+			{
+				var proration = await provider.GetRequiredService<IProrationPolicyAppService>().CreateAsync(new CreateUpdateProrationPolicyDto
+				{
+					AcademicYearId = year.Id,
+					PolicyName = candidate.Name + " proration",
+					PolicyCode = $"PR-{Guid.NewGuid():N}"[..16],
+					Status = "Active",
+					FeeHeadRules = heads.Select(headId => new ProrationPolicyRuleDto
+					{
+						FeeHeadId = headId,
+						RuleType = "FullMonthCharge",
+					}).ToList(),
+				});
+				candidate.ProrationPolicyId = proration.Id;
+			}
 			if (withRefundPolicy)
 			{
 				var expenseHead = new AccountHead(Guid.NewGuid(), tenantId, year.Id, candidate.Name + " Refund", AccountHeadType.Expense, null, null);

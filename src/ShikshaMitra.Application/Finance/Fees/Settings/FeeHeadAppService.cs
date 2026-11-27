@@ -192,7 +192,8 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 		await referenceLock.AcquireAsync();
 		var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
-		await EnsureFeeCategoryAvailableAsync(feeHead.AcademicYearId, input.FeeCategoryId);
+		await EnsureFeeCategoryAvailableAsync(feeHead.AcademicYearId, input.FeeCategoryId,
+			retainingCategory: feeHead.FeeCategoryId == input.FeeCategoryId);
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 			feeHead.AcademicYearId, input.FeeCategoryId, input.Name, feeHeadId);
 		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId);
@@ -210,11 +211,12 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
         return await MapToResponseAsync(feeHead);
     }
 
-	private async Task EnsureFeeCategoryAvailableAsync(Guid academicYearId, Guid categoryId)
+	private async Task EnsureFeeCategoryAvailableAsync(Guid academicYearId, Guid categoryId, bool retainingCategory = false)
 	{
 		var tenantId = CurrentTenant.Id;
 		if (!await feeCategoryRepository.AnyAsync(category =>
-			category.Id == categoryId && category.TenantId == tenantId && category.AcademicYearId == academicYearId))
+			category.Id == categoryId && category.TenantId == tenantId && category.AcademicYearId == academicYearId &&
+			(category.IsActive || retainingCategory)))
 			throw new BusinessException(FinanceFeeHeadErrorCodes.InvalidFeeCategory);
 	}
 
@@ -233,8 +235,10 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
         };
     }
 
+	[UnitOfWork(isTransactional: true)]
     public async Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
     {
+		await referenceLock.AcquireAsync();
         var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
 		await feeCategoryManager.EnsureFeeHeadStatusChangeAllowedAsync(feeHead.FeeCategoryId);

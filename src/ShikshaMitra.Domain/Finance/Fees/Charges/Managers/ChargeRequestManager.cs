@@ -41,7 +41,7 @@ public partial class ChargeRequestManager(
 		string? additionalNotes = null,
 		IReadOnlyCollection<Guid>? permittedStudentIds = null)
 	{
-		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
+		var category = await GetCategoryAsync(chargeCategoryId, academicYearId);
 		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId, permittedStudentIds);
 		var initialStatus = ChargeStatus.Pending;
 
@@ -112,6 +112,7 @@ public partial class ChargeRequestManager(
 			await chargeRepository.DeleteAsync(line, autoSave: false);
 		}
 
+		var previousCategoryId = request.ChargeCategoryId;
 		request.Update(
 			chargeName,
 			chargeCategoryId,
@@ -122,7 +123,8 @@ public partial class ChargeRequestManager(
 			additionalNotes,
 			audienceSnapshot);
 
-		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, academicYearId);
+		var category = await GetCategoryAsync(request.ChargeCategoryId, academicYearId,
+			retainingCategory: request.ChargeCategoryId == previousCategoryId);
 		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
 		var existingStudentIds = existingLines.Where(l => l.StudentId.HasValue).Select(l => l.StudentId!.Value).ToHashSet();
 		var newStudentIds = resolvedIds.Where(id => !existingStudentIds.Contains(id)).ToList();
@@ -250,20 +252,24 @@ public partial class ChargeRequestManager(
 		return lines;
 	}
 
-	public async Task SetIncomeCategoryFromChargeCategoryAsync(ChargeRequest request)
+	public async Task SetIncomeCategoryFromChargeCategoryAsync(ChargeRequest request, Guid? previousCategoryId = null)
 	{
-		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, request.AcademicYearId);
+		var category = await GetCategoryAsync(request.ChargeCategoryId, request.AcademicYearId,
+			retainingCategory: request.ChargeCategoryId == previousCategoryId);
 		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
 	}
 
 	private async Task SetIncomeCategoryFromChargeCategoryAsync(ChargeRequest request, ChargeCategory category)
 	{
+		if (!category.IsActive && request.IncomeCategoryId.HasValue && request.IncomeCategoryName != null)
+			return;
+
 		var income = await routingManager.RequireCategoryAsync(request.AcademicYearId,
 			category.IncomeCategoryId, TransactionType.Income);
 		request.SetIncomeCategory(income.Id, income.Name);
 	}
 
-	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId, Guid academicYearId)
+	private async Task<ChargeCategory> GetCategoryAsync(Guid chargeCategoryId, Guid academicYearId, bool retainingCategory = false)
 	{
 		// Mapping reads and the resulting request/line writes share the deletion lock.
 		await referenceLock.AcquireAsync();
@@ -271,7 +277,7 @@ public partial class ChargeRequestManager(
 			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryNotFound)
 				.WithData("ChargeCategoryId", chargeCategoryId);
 
-		if (!category.IsActive)
+		if (!category.IsActive && !retainingCategory)
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryInactive)
 				.WithData("ChargeCategoryId", chargeCategoryId);

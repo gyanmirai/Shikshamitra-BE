@@ -52,6 +52,7 @@ public class AssignmentStudentDto
 	public int? StructureRevision { get; set; }
 	public string? AssignmentConcurrencyStamp { get; set; }
 	public bool CanEditStructure { get; set; }
+	public bool CanChangeVariableFees { get; set; }
 	public string? StructureEditBlocker { get; set; }
 	public string AssignmentState { get; set; } = "Unassigned";
 	public string AssignmentSource { get; set; } = "Finance";
@@ -93,6 +94,10 @@ public class AssignmentHeadDto
     public bool IsVariable { get; set; }
     public string? ZeroAmountReason { get; set; }
 	public string AmountBasis { get; set; } = "AnnualTotal";
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public DateOnly? MonthlyRateEffectiveDate { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool CanChangeVariableFee { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
 	public bool SupportsMonthlyRate { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

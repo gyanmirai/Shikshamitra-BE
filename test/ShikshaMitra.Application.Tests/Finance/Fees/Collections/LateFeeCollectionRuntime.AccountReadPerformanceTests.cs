@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Students;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
@@ -119,6 +122,8 @@ public partial class LateFeeCollectionRuntime_Tests
 			{
 				var seeded = await SeedStudentWithOverdueDueFeeAsync(10, true);
 				var student = await _studentRepo.GetAsync(seeded.StudentId);
+				student.AssignGrNumber("GR-ROSTER-17", reason: "Roster identifier fixture");
+				await _studentRepo.UpdateAsync(student, autoSave: true);
 				var assignment = (await _studentFeeStructureRepo.GetListAsync(x => x.StudentId == student.Id)).Single();
 				var originalDue = await _dueFeeRepo.GetAsync(seeded.DueFeeId);
 				var accounts = GetRequiredService<IRepository<FinanceFeeAccount, Guid>>();
@@ -148,11 +153,20 @@ public partial class LateFeeCollectionRuntime_Tests
 					account.LinkStudent(student.Id, DateTimeOffset.UtcNow);
 					(await db.Set<FinanceFeeAccount>().Where(a => a.Id == id).Select(a => a.StudentId).SingleAsync()).ShouldBeNull();
 				}
-				var input = new ShikshaMitra.Finance.Fees.Collections.Dtos.GetFeeCollectionSummaryInput
+				var input = new GetFeeCollectionSummaryInput
 				{
 					AcademicYearId = seeded.AcademicYearId, BoardId = student.AcademicBoardId!.Value,
 					EducationMediumId = student.AcademicMediumId, MaxResultCount = 100
 				};
+				var rosterInput = new GetFeeCollectionSummaryInput
+				{
+					AcademicYearId = input.AcademicYearId, BoardId = input.BoardId,
+					EducationMediumId = input.EducationMediumId, StudentRecordsOnly = true, MaxResultCount = 1
+				};
+				var unlinkedRoster = await _feeCollections.GetSummaryAsync(rosterInput);
+				unlinkedRoster.TotalCount.ShouldBe(1);
+				unlinkedRoster.Items.Single().StudentId.ShouldBe(student.Id);
+				unlinkedRoster.Items.Single().TotalFees.ShouldBe(5000d);
 				var summary = await _feeCollections.GetSummaryAsync(input);
 				summary.TotalCount.ShouldBe(accountCount + 1);
 				summary.Items.Sum(x => x.TotalFees).ShouldBe((accountCount + 1) * 5000d);
@@ -169,6 +183,31 @@ public partial class LateFeeCollectionRuntime_Tests
 				if (accountCount == 1) summary.Items.Single().FinanceFeeAccountId.ShouldBe(accountIds.Single());
 				else summary.Items.Count(x => !x.FinanceFeeAccountId.HasValue).ShouldBe(1);
 				summary.Items.ShouldAllBe(x => x.StudentId == student.Id);
+
+				var inactive = new Student(Guid.NewGuid(), TestTenantId, "Inactive roster payer", null, null,
+					seeded.AcademicYearId, student.AcademicBoardId!.Value, student.AcademicMediumId,
+					student.AcademicMediumStageId!.Value, null, null, status: StudentLifeCycleStatusEnum.InActive);
+				await _studentRepo.InsertAsync(inactive, autoSave: true);
+
+				var roster = await _feeCollections.GetSummaryAsync(rosterInput);
+				roster.TotalCount.ShouldBe(1);
+				roster.Items.Single().StudentId.ShouldBe(student.Id);
+				roster.Items.Single().StudentName.ShouldBe("Test Student");
+				roster.Items.Single().GrNumber.ShouldBe("GR-ROSTER-17");
+				roster.Items.Single().PendingFees.ShouldBe((accountCount + 1) * 5000d);
+				roster.Items.Single().PendingCharges.ShouldBe((accountCount + 1) * 200d);
+				rosterInput.Search = "GR-ROSTER-17";
+				rosterInput.SortBy = "pendingFees";
+				(await _feeCollections.GetSummaryAsync(rosterInput)).Items.Single().PendingFees.ShouldBe((accountCount + 1) * 5000d);
+				var export = await _feeCollections.ExportAsync(new FeeCollectionExportRequestDto
+				{
+					AcademicYearId = input.AcademicYearId, BoardId = input.BoardId,
+					EducationMediumId = input.EducationMediumId, StudentRecordsOnly = true,
+				});
+				var csv = Encoding.UTF8.GetString(export);
+				csv.ShouldContain("Test Student,GR-ROSTER-17");
+				csv.ShouldNotContain("Original applicant");
+				csv.ShouldNotContain("Inactive roster payer");
 			}
 		});
 	}

@@ -8,13 +8,16 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Reports;
 using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
@@ -88,6 +91,66 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var empty = (await emptyResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
 		empty.TotalCount.ShouldBe(0);
 		empty.Items.ShouldBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Aggregate_The_Filtered_Roster_And_Load_Only_Page_Details()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = $"Paged{Guid.NewGuid():N}"[..12];
+		var joined = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		var date = new DateOnly(2026, 4, 11);
+		var present = await CreateActiveEmployeeAsync(marker + "A", dateOfJoining: joined);
+		var onLeave = await CreateActiveEmployeeAsync(marker + "B", dateOfJoining: joined);
+		var pending = await CreateActiveEmployeeAsync(marker + "C", dateOfJoining: joined);
+		await InsertAttendanceForTestAsync(present.Id, date, EmployeeAttendanceStatusType.Present, "Page notes");
+		await InsertLeaveForAttendanceAsync(onLeave.Id, date, date, EmployeeLeaveStatusType.Approved);
+
+		var url = $"{BaseUrl}/day?attendanceDate={date:yyyy-MM-dd}&search={marker}&maxResultCount=1";
+		TakeAttendanceDayResponse first;
+		using (var attendanceSql = new SelectCommandCapture("EmployeeAttendances"))
+		{
+			first = (await Client.GetFromJsonAsync<TakeAttendanceDayResponse>(url, JsonOptions))!;
+			attendanceSql.Commands.ShouldContain(sql => sql.Contains("GROUP BY") && sql.Contains("COUNT("));
+			attendanceSql.Commands.ShouldContain(sql => sql.Contains("Remarks") && sql.Contains("EmployeeId"));
+			attendanceSql.Commands.ShouldNotContain(sql => sql.Contains("Remarks") && sql.Contains("CreationTime"));
+		}
+		first.TotalCount.ShouldBe(3);
+		first.Items.Single().EmployeeId.ShouldBe(present.Id);
+		first.Items.Single().Remarks.ShouldBe("Page notes");
+		first.Summary.Present.ShouldBe(1);
+		first.Summary.OnLeave.ShouldBe(1);
+		first.Summary.NotMarked.ShouldBe(1);
+
+		var next = (await Client.GetFromJsonAsync<TakeAttendanceDayResponse>(url + "&skipCount=1", JsonOptions))!;
+		next.Items.Single().EmployeeId.ShouldBe(onLeave.Id);
+		next.Items.Single().Status.ShouldBe(TakeAttendanceStatus.OnLeave);
+		JsonSerializer.Serialize(next.Summary).ShouldBe(JsonSerializer.Serialize(first.Summary));
+
+		var empty = (await Client.GetFromJsonAsync<TakeAttendanceDayResponse>(url + "&skipCount=3", JsonOptions))!;
+		empty.Items.ShouldBeEmpty();
+		empty.TotalCount.ShouldBe(3);
+		JsonSerializer.Serialize(empty.Summary).ShouldBe(JsonSerializer.Serialize(first.Summary));
+
+		var query = new HrOperationalTableQueryRequest
+		{
+			Table = "hr-manual-attendance",
+			Query = JsonSerializer.SerializeToElement(new { attendanceDate = $"{date:yyyy-MM-dd}", search = marker }),
+			Size = 1,
+			Criteria = new() { Sorts = [new() { Column = "fullName", Direction = "desc" }] }
+		};
+		using var sorted = await Client.PostAsJsonAsync("/api/hr/table-query", query, JsonOptions);
+		sorted.StatusCode.ShouldBe(HttpStatusCode.OK, await sorted.Content.ReadAsStringAsync());
+		var sortedPage = (await sorted.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		sortedPage.TotalCount.ShouldBe(3);
+		sortedPage.Items.Single().EmployeeId.ShouldBe(pending.Id);
+
+		using var denied = Factory.CreateClient();
+		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.Reports.Export);
+		using var deniedResponse = await denied.PostAsJsonAsync("/api/hr/table-query", query, JsonOptions);
+		deniedResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]

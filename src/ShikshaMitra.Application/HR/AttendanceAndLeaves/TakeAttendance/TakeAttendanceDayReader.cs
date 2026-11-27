@@ -1,6 +1,5 @@
-﻿using ShikshaMitra.HR.WorkShifts;
+using ShikshaMitra.HR.WorkShifts;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
@@ -8,8 +7,6 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
-using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.TenantSettings;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -24,8 +21,6 @@ public class TakeAttendanceDayReader(
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	TakeAttendanceAccessService accessService,
 	TakeAttendanceHolidayReader holidayReader,
-	TakeAttendanceEmployeeStageResolver employeeStageResolver,
-	HrUserScopeAccessService hrScopeAccessService,
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
 	EmployeeShiftResolver shiftResolver,
 	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
@@ -34,6 +29,12 @@ public class TakeAttendanceDayReader(
 	: ITransientDependency
 {
 	public async Task<TakeAttendanceDayResponse> GetDayAsync(GetTakeAttendanceDayInput input)
+	{
+		var readPage = await PreparePagesAsync(input);
+		return await readPage(input.SkipCount, input.MaxResultCount <= 0 ? 50 : input.MaxResultCount);
+	}
+
+	internal async Task<Func<int, int, Task<TakeAttendanceDayResponse>>> PreparePagesAsync(GetTakeAttendanceDayInput input)
 	{
 		var date = TakeAttendanceDateParser.ParseDate(input.AttendanceDate);
 		var dateOnly = DateOnly.FromDateTime(date);
@@ -82,70 +83,84 @@ public class TakeAttendanceDayReader(
 				(e.MobileNo ?? "").ToLower().Contains(s));
 		}
 
-		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).ThenBy(e => e.Id);
+		// The scoped employee query already requires an accessible assignment for narrow scopes.
+		var employeeIds = empQuery.Select(e => e.Id);
+		var totalCount = await asyncExecuter.CountAsync(employeeIds);
+		var attendanceQuery = (await employeeAttendanceRepository.GetQueryableAsync())
+			.Where(a => a.AttendanceDate == dateOnly);
+		var approvedLeaveQuery = (await employeeLeaveRepository.GetQueryableAsync())
+			.Where(l => l.Status == EmployeeLeaveStatusType.Approved &&
+				l.StartDateOnly <= dateOnly && l.EndDateOnly >= dateOnly);
 
-		var allEmployeeIds = await asyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
-		var employeeStageMap = await employeeStageResolver.ResolveEmployeeStagesAsync(allEmployeeIds, scope);
-		var scopedEmployeeIds = await FilterEmployeeIdsByScopeAsync(allEmployeeIds, employeeStageMap, scope);
-		empQuery = empQuery.Where(e => scopedEmployeeIds.Contains(e.Id));
-
-		var attBaseQuery = await employeeAttendanceRepository.GetQueryableAsync();
-
-		var attForSummary = await asyncExecuter.ToListAsync(
-			attBaseQuery.Where(a =>
-				scopedEmployeeIds.Contains(a.EmployeeId) &&
-				a.AttendanceDate == dateOnly));
-		var approvedLeaves = await employeeLeaveRepository.GetApprovedAttendanceLeaveRowsForDateAsync(
-			scopedEmployeeIds,
-			dateOnly);
-		var approvedLeaveByEmployee = approvedLeaves
-			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(g => g.Key, g => g.OrderBy(x => x.StartDate).First());
-
-		var employees = await asyncExecuter.ToListAsync(
-			empQuery.Skip(input.SkipCount).Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
-
-		var ids = employees.Select(e => e.Id).ToList();
-		var attRows = attForSummary.Where(a => ids.Contains(a.EmployeeId)).ToList();
-		var attByEmp = attRows.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.First());
-		var shifts = await shiftResolver.ForDateAsync(ids, dateOnly);
-		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateOrDefaultAsync(ids, dateOnly);
-
-		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, approvedLeaveByEmployee, shifts, captureModeByEmployee, date, holiday, holidayReason);
-		var summary = TakeAttendanceDayProjection.BuildSummary(attForSummary, approvedLeaveByEmployee, scopedEmployeeIds.Count);
-		var distinctCaptureModes = items
-			.Select(x => x.CaptureMode)
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.Take(2)
-			.ToList();
-		var dayCaptureMode = distinctCaptureModes.Count == 1 ? distinctCaptureModes[0] : "integrated";
-
-		return new TakeAttendanceDayResponse
+		var summary = new TakeAttendanceSummaryDto();
+		if (totalCount > 0)
 		{
-			TotalCount = scopedEmployeeIds.Count,
-			Date = dateOnly,
-			IsDayLocked = locked != null,
-			IsHoliday = holiday != null,
-			CaptureMode = dayCaptureMode,
-			HolidayName = holiday?.HolidayName,
-			HolidayReason = holidayReason,
-			LockedByUserId = locked?.LockedByUserId,
-			LockedAt = locked?.LockedAt,
-			Summary = summary,
-			Items = items
+			var scopedAttendance = attendanceQuery.Where(a => employeeIds.Contains(a.EmployeeId));
+			var statusCounts = await asyncExecuter.ToListAsync(scopedAttendance
+				.GroupBy(a => a.StatusType)
+				.Select(g => new { Status = g.Key, Count = g.Count() }));
+			var markedIds = scopedAttendance.Select(a => a.EmployeeId);
+			summary.Present = statusCounts.FirstOrDefault(x => x.Status == EmployeeAttendanceStatusType.Present)?.Count ?? 0;
+			summary.HalfDay = statusCounts.FirstOrDefault(x => x.Status == EmployeeAttendanceStatusType.HalfDayLeave)?.Count ?? 0;
+			summary.Absent = statusCounts.FirstOrDefault(x => x.Status == EmployeeAttendanceStatusType.FullDayLeave)?.Count ?? 0;
+			summary.OnLeave = await asyncExecuter.CountAsync(approvedLeaveQuery
+				.Where(l => employeeIds.Contains(l.EmployeeId) && !markedIds.Contains(l.EmployeeId))
+				.Select(l => l.EmployeeId)
+				.Distinct());
+			summary.NotMarked = totalCount - statusCounts.Sum(x => x.Count) - summary.OnLeave;
+		}
+
+		return async (skip, size) =>
+		{
+			var response = new TakeAttendanceDayResponse
+			{
+				TotalCount = totalCount,
+				Date = dateOnly,
+				IsDayLocked = locked != null,
+				IsHoliday = holiday != null,
+				HolidayName = holiday?.HolidayName,
+				HolidayReason = holidayReason,
+				LockedByUserId = locked?.LockedByUserId,
+				LockedAt = locked?.LockedAt,
+				Summary = summary
+			};
+
+			if (skip >= totalCount)
+			{
+				return response;
+			}
+
+			var employees = await asyncExecuter.ToListAsync(empQuery
+				.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).ThenBy(e => e.Id)
+				.Skip(skip).Take(size)
+				.Select(e => new TakeAttendanceDayProjection.EmployeeRow(
+					e.Id, e.EmployeeGroup, e.FirstName, e.MiddleName, e.LastName, e.EmployeeCode, e.Department)));
+
+			var ids = employees.Select(e => e.Id).ToList();
+			var attendanceRows = await asyncExecuter.ToListAsync(attendanceQuery
+				.Where(a => ids.Contains(a.EmployeeId))
+				.Select(a => new TakeAttendanceDayProjection.AttendanceRow(
+					a.EmployeeId, a.StatusType, a.TimeIn, a.TimeOut, a.Remarks, a.Source)));
+			var attendanceByEmployee = attendanceRows.GroupBy(a => a.EmployeeId)
+				.ToDictionary(g => g.Key, g => g.First());
+			var approvedLeaves = await asyncExecuter.ToListAsync(approvedLeaveQuery
+				.Where(l => ids.Contains(l.EmployeeId))
+				.Select(l => new ApprovedAttendanceLeaveRow(l.Id, l.EmployeeId, l.HalfDay, l.StartDate, l.EndDate)));
+			var leaveByEmployee = approvedLeaves.GroupBy(l => l.EmployeeId)
+				.ToDictionary(g => g.Key, g => g.OrderBy(l => l.StartDate).ThenBy(l => l.LeaveId).First());
+			var shifts = await shiftResolver.ForDateAsync(ids, dateOnly);
+			var captureModes = await captureModeLookupResolver.ResolveForDateOrDefaultAsync(ids, dateOnly);
+
+			response.Items = TakeAttendanceDayProjection.BuildRows(employees, attendanceByEmployee, leaveByEmployee,
+				shifts, captureModes, date, holiday, holidayReason);
+			var distinctCaptureModes = response.Items.Select(x => x.CaptureMode)
+				.Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToList();
+			if (distinctCaptureModes.Count == 1)
+			{
+				response.CaptureMode = distinctCaptureModes[0];
+			}
+
+			return response;
 		};
 	}
-
-	private Task<List<Guid>> FilterEmployeeIdsByScopeAsync(
-		List<Guid> employeeIds,
-		Dictionary<Guid, Guid?> employeeStageMap,
-		UserScopeContext scope)
-	{
-		return hrScopeAccessService.FilterEmployeeIdsByStageAsync(
-			employeeIds,
-			employeeStageMap,
-			scope,
-			includeUnknownStageEmployees: HrUserScopeAccess.HasSingleConcreteMediumStage(scope));
-	}
-
 }

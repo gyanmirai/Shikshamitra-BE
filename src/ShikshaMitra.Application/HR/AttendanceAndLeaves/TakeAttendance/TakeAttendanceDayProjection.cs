@@ -1,21 +1,26 @@
-﻿using ShikshaMitra.HR.WorkShifts;
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
-using ShikshaMitra.Common;
-using ShikshaMitra.TenantSettings;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 internal static class TakeAttendanceDayProjection
 {
+	internal sealed record EmployeeRow(Guid Id, EmployeeGroupType? EmployeeGroup,
+		string? FirstName, string? MiddleName, string? LastName, string? EmployeeCode, string? Department);
+
+	internal sealed record AttendanceRow(Guid EmployeeId, EmployeeAttendanceStatusType StatusType,
+		DateTimeOffset? TimeIn, DateTimeOffset? TimeOut, string? Remarks, AttendanceRecordSource Source);
+
 	public static List<TakeAttendanceEmployeeRowDto> BuildRows(
-		IReadOnlyList<Employee> employees,
-		IReadOnlyDictionary<Guid, EmployeeAttendance> attendanceByEmployee,
+		IReadOnlyList<EmployeeRow> employees,
+		IReadOnlyDictionary<Guid, AttendanceRow> attendanceByEmployee,
 		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee,
 		IReadOnlyDictionary<Guid, EmployeeWorkShift> shifts,
 		IReadOnlyDictionary<Guid, AttendanceCaptureMode> captureModeByEmployee,
@@ -23,7 +28,8 @@ internal static class TakeAttendanceDayProjection
 		Holiday? holiday,
 		string? holidayReason)
 	{
-		var items = new List<TakeAttendanceEmployeeRowDto>();
+		var items = new List<TakeAttendanceEmployeeRowDto>(employees.Count);
+		var dateIso = new DateTimeOffset(date.Date, TimeSpan.Zero).ToString("o");
 		foreach (var employee in employees)
 		{
 			attendanceByEmployee.TryGetValue(employee.Id, out var attendance);
@@ -43,7 +49,7 @@ internal static class TakeAttendanceDayProjection
 				FullName = FormatName(employee.FirstName, employee.MiddleName, employee.LastName),
 				EmployeeCode = employee.EmployeeCode ?? string.Empty,
 				Department = employee.Department,
-				DateIso = new DateTimeOffset(date.Date, TimeSpan.Zero).ToString("o"),
+				DateIso = dateIso,
 				InTime = attendance?.TimeIn?.ToString("o"),
 				OutTime = attendance?.TimeOut?.ToString("o"),
 				ShiftName = shift?.ShiftName,
@@ -72,23 +78,6 @@ internal static class TakeAttendanceDayProjection
 		return items;
 	}
 
-	public static TakeAttendanceSummaryDto BuildSummary(
-		IReadOnlyList<EmployeeAttendance> attendanceRows,
-		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee,
-		int scopedEmployeeCount)
-	{
-		var onLeaveCount = CountApprovedLeaveWithoutAttendance(attendanceRows, approvedLeaveByEmployee);
-
-		return new TakeAttendanceSummaryDto
-		{
-			Present = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.Present),
-			HalfDay = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
-			Absent = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
-			OnLeave = onLeaveCount,
-			NotMarked = scopedEmployeeCount - attendanceRows.Count - onLeaveCount
-		};
-	}
-
 	private static TakeAttendanceStatus MapDomainStatus(EmployeeAttendanceStatusType status) =>
 		status switch
 		{
@@ -97,14 +86,6 @@ internal static class TakeAttendanceDayProjection
 			EmployeeAttendanceStatusType.FullDayLeave => TakeAttendanceStatus.Absent,
 			_ => TakeAttendanceStatus.NotMarked
 		};
-
-	private static int CountApprovedLeaveWithoutAttendance(
-		IReadOnlyList<EmployeeAttendance> attendanceRows,
-		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee)
-	{
-		var attendanceEmployeeIds = attendanceRows.Select(x => x.EmployeeId).ToHashSet();
-		return approvedLeaveByEmployee.Keys.Count(employeeId => !attendanceEmployeeIds.Contains(employeeId));
-	}
 
 	private static string FormatName(string? first, string? middle, string? last)
 	{

@@ -176,12 +176,23 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 				}
 				return attendancePage(input.SkipCount, input.MaxResultCount);
 			}
-			var captureAttendance = request.Table == "hr-attendance-register";
+			Func<int, int, Task<TakeAttendanceDayResponse>>? manualAttendancePage = null;
+			async Task<TakeAttendanceDayResponse> ReadManualAttendancePageAsync(GetTakeAttendanceDayInput input)
+			{
+				if (manualAttendancePage == null)
+				{
+					await Service<IAuthorizationService>().CheckAsync(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View);
+					manualAttendancePage = await Service<TakeAttendanceDayReader>().PreparePagesAsync(input);
+				}
+				return await manualAttendancePage(input.SkipCount, input.MaxResultCount);
+			}
 			long? expected = null;
 			while (true)
 			{
 				Service<Volo.Abp.Threading.ICancellationTokenProvider>().Token.ThrowIfCancellationRequested();
-				var page = await ReadUnfilteredAsync(request, next, 100, captureAttendance ? ReadAttendancePageAsync : null);
+				var page = await ReadUnfilteredAsync(request, next, 100,
+					request.Table == "hr-attendance-register" ? ReadAttendancePageAsync : null,
+					request.Table == "hr-manual-attendance" ? ReadManualAttendancePageAsync : null);
 				if (page.Total > HrReportingEngine.MaximumPopulation) throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
 				expected ??= page.Total;
 				var raw = HrOperationalTableQuery.Items(page.Envelope);
@@ -240,7 +251,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		}).ToList();
 	}
 	private async Task<HrTableExportPage> ReadUnfilteredAsync(HrTableExportRequest request, int offset, int size,
-		Func<GetGroupedAttendanceRegisterInput, Task<GroupedAttendanceRegisterResponse>>? readAttendancePage = null)
+		Func<GetGroupedAttendanceRegisterInput, Task<GroupedAttendanceRegisterResponse>>? readAttendancePage = null,
+		Func<GetTakeAttendanceDayInput, Task<TakeAttendanceDayResponse>>? readManualAttendancePage = null)
 	{
 		Validate(request);
 		// These legacy readers enforce view access in their HTTP controllers.
@@ -323,6 +335,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"employee-onboarding-table" => await Service<IEmployeeApplicationAppService>().GetListAsync(Input<GetEmployeeApplicationListInput>()),
 			"hr-attendance-register" when readAttendancePage != null => await readAttendancePage(Input<GetGroupedAttendanceRegisterInput>()),
 			"hr-attendance-register" => await Service<IAttendanceRegisterAppService>().GetGroupedAsync(Input<GetGroupedAttendanceRegisterInput>()),
+			"hr-manual-attendance" when readManualAttendancePage != null => await readManualAttendancePage(Input<GetTakeAttendanceDayInput>()),
 			"hr-manual-attendance" => await Service<ITakeAttendanceAppService>().GetDayAsync(Input<GetTakeAttendanceDayInput>()),
 			"payroll-monthly-workbench-table" when q["month"] != null => await Service<IPayrollPreviewRunAppService>()
 				.GetRegisterAsync(new PayrollRegisterInput

@@ -16,12 +16,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionInquirySiblingMatchService(
 	IRepository<AdmissionApplicant, Guid> applicants,
 	AdmissionInquiryScopeAccessService inquiryScope,
-	AdmissionApplicationScopeAccessService applicationScope,
 	AdmissionDirectFamilyMatchService familyMatches) : ApplicationService, ITransientDependency
 {
 	internal async Task<HashSet<Guid>> FindPossibleInquiryIdsAsync(IReadOnlyCollection<AdmissionInquiry> rows)
 	{
-		if (rows.Count == 0) return [];
+		if (!rows.Any(IsPending)) return [];
 		var context = await ReadContextAsync(rows);
 		return rows.Where(row => IsPending(row) && context.TargetApplicants.Any(target => target.Id == row.ApplicantId && !target.ExistingStudentId.HasValue) &&
 			context.Contacts.TryGetValue(row.Id, out var contact) &&
@@ -77,20 +76,15 @@ public class AdmissionInquirySiblingMatchService(
 		if (contacts.Count == 0) return new(contacts, [], [], targets, []);
 		var canReadApplications = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
 		var retained = rows.Where(row => row.FamilyId.HasValue).Select(row => row.FamilyId!.Value).Distinct().ToArray();
-		var families = await familyMatches.FindInquiryMatchesBatchAsync(contacts.Values.SelectMany(contact => contact.Phones),
+		var (families, visible) = await familyMatches.FindInquiryMatchesBatchAsync(contacts.Values.SelectMany(contact => contact.Phones),
 			contacts.Values.SelectMany(contact => contact.Emails), retained, canReadApplications);
-		var familyIds = families.Select(family => family.FamilyId).ToArray();
-		if (familyIds.Length == 0) return new(contacts, families, [], targets, []);
+		if (visible.Count == 0) return new(contacts, families, [], targets, []);
 		var scopedInquiries = await inquiryScope.GetScopedQueryAsync();
-		var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
-		if (!canReadApplications) scopedApplications = scopedApplications.Where(_ => false);
-		var visibleQuery = (await applicants.GetQueryableAsync()).Where(applicant => applicant.TenantId == CurrentTenant.Id &&
-			applicant.Status == AdmissionApplicantStatus.Active && Enumerable.Contains(familyIds, applicant.FamilyId) &&
-			(scopedInquiries.Any(row => row.ApplicantId == applicant.Id) || scopedApplications.Any(row => row.ApplicantId == applicant.Id)));
-		var visible = await AsyncExecuter.ToListAsync(await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingSourceVisibilityService>().ApplyAsync(visibleQuery));
 		var visibleIds = visible.Select(applicant => applicant.Id).ToArray();
-		var sourceInquiries = visibleIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(scopedInquiries.Where(source =>
-			source.ApplicantId.HasValue && Enumerable.Contains(visibleIds, source.ApplicantId.Value)));
+		var sourceInquiries = await AsyncExecuter.ToListAsync(scopedInquiries.Where(source =>
+			source.ApplicantId.HasValue && Enumerable.Contains(visibleIds, source.ApplicantId.Value))
+			.Select(source => new InquirySource(source.Id, source.ApplicantId, source.AdmissionCycleId, source.InquiryNumber,
+				source.ApplicantName, source.NormalizedPhone, source.CreationTime)));
 		return new(contacts, families, visible, targets, sourceInquiries);
 	}
 
@@ -107,7 +101,7 @@ public class AdmissionInquirySiblingMatchService(
 		contact.Phones.Contains(NormalizePhone(parent.Mobile)) || contact.Emails.Contains(NormalizeEmail(parent.Email)));
 	private static bool IsPending(AdmissionInquiry inquiry) => inquiry.DuplicateOfId == null &&
 		inquiry.Status is AdmissionInquiryStatus.New or AdmissionInquiryStatus.Contacted or AdmissionInquiryStatus.FollowUp;
-	private static bool IsSameChild(AdmissionInquiry inquiry, AdmissionApplicant target, AdmissionApplicant source, List<AdmissionInquiry> sourceInquiries) =>
+	private static bool IsSameChild(AdmissionInquiry inquiry, AdmissionApplicant target, AdmissionApplicant source, List<InquirySource> sourceInquiries) =>
 		sourceInquiries.Where(row => row.ApplicantId == source.Id && row.AdmissionCycleId == inquiry.AdmissionCycleId)
 			.Select(row => row.ApplicantName).DefaultIfEmpty(string.Join(" ", new[] { source.FirstName, source.MiddleName, source.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))))
 			.Any(name => AdmissionInquiryStudentDuplicateGuard.IsSameIdentity(inquiry.ApplicantName, target.DateOfBirth, name, source.DateOfBirth));
@@ -118,6 +112,8 @@ public class AdmissionInquirySiblingMatchService(
 	}
 	private static string NormalizeEmail(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;
 	private sealed record Contact(HashSet<string> Phones, HashSet<string> Emails);
+	private sealed record InquirySource(Guid Id, Guid? ApplicantId, Guid AdmissionCycleId, string InquiryNumber,
+		string ApplicantName, string NormalizedPhone, DateTime CreationTime);
 	private sealed record Context(Dictionary<Guid, Contact> Contacts, List<AdmissionDirectFamilyMatchDto> Families,
-		List<AdmissionApplicant> VisibleApplicants, List<AdmissionApplicant> TargetApplicants, List<AdmissionInquiry> SourceInquiries);
+		List<AdmissionApplicant> VisibleApplicants, List<AdmissionApplicant> TargetApplicants, List<InquirySource> SourceInquiries);
 }

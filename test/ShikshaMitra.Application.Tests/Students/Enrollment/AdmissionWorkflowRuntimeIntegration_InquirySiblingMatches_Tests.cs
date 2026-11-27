@@ -4,16 +4,61 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.ValueObjects;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.EntityFrameworkCore;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Inquiry_list_reuses_visible_siblings_and_skips_matching_for_closed_rows() => RunCertificationScenarioAsync(async () =>
+	{
+		var (offering, first, second) = await CreatePendingFamilyConfirmationFixtureAsync();
+		var service = GetRequiredService<IAdmissionInquiryAppService>();
+		var input = new AdmissionInquiryListInput { AdmissionOfferingId = offering.Id, MaxResultCount = 25 };
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
+			var result = await service.GetListAsync(input);
+			result.Items.Where(row => row.Id == first.Id || row.Id == second.Id).ShouldAllBe(row => row.HasPossibleSiblingMatch);
+			result.TotalCount.ShouldBe(2);
+			var familyApplicantReads = capture.ReadCommands.Count(sql =>
+				sql.Contains("FROM \"AppAdmissionApplicants\" AS", StringComparison.Ordinal) &&
+				sql.Contains(".\"FamilyId\" IN (", StringComparison.Ordinal));
+			Console.WriteLine($"Pending inquiry page: {capture.ReadCount} reads, {familyApplicantReads} applicant reads by family.");
+			familyApplicantReads.ShouldBe(2, "The page needs one linked-sibling read and one candidate snapshot.");
+		});
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<AdmissionInquiry, Guid>>();
+			foreach (var id in new[] { first.Id, second.Id })
+			{
+				var inquiry = await repository.GetAsync(id);
+				inquiry.SetStatus(AdmissionInquiryStatus.NotInterested);
+				await repository.UpdateAsync(inquiry, true);
+			}
+		});
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
+			var result = await service.GetListAsync(input);
+			result.TotalCount.ShouldBe(2);
+			result.Items.ShouldAllBe(row => !row.HasPossibleSiblingMatch);
+			Console.WriteLine($"Closed inquiry page: {capture.ReadCount} reads.");
+			capture.ReadCommands.ShouldNotContain(sql => sql.Contains("FROM \"AppAdmissionGuardians\"", StringComparison.Ordinal));
+		});
+	});
+
 	[Fact]
 	public Task Inquiry_sibling_matches_exclude_explicit_guardian_contact_but_keep_saved_parent_contacts() => RunCertificationScenarioAsync(async () =>
 	{

@@ -86,18 +86,24 @@ public class AdmissionDirectFamilyMatchService(
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose Father or Mother for each parent contact.");
 		var phones = NormalizePhones((contacts ?? []).Select(contact => contact.Mobile).Append(mobile));
 		var emails = NormalizeEmails((contacts ?? []).Select(contact => contact.Email).Append(email));
-		return await FindAccessibleMatchesCoreAsync(phones, emails, includeLegacyGuardians);
+		return (await FindAccessibleMatchesCoreAsync(phones, emails, includeLegacyGuardians)).Families;
 	}
 
-	internal Task<List<AdmissionDirectFamilyMatchDto>> FindInquiryMatchesBatchAsync(IEnumerable<string?> phones,
-		IEnumerable<string?> emails, Guid[] retainedFamilyIds, bool includeApplications) =>
-		FindAccessibleMatchesCoreAsync(NormalizePhones(phones), NormalizeEmails(emails), false, retainedFamilyIds, includeApplications, true);
+	internal async Task<(List<AdmissionDirectFamilyMatchDto> Families, List<AdmissionApplicant> VisibleApplicants)> FindInquiryMatchesBatchAsync(
+		IEnumerable<string?> phones, IEnumerable<string?> emails, Guid[] retainedFamilyIds, bool includeApplications)
+	{
+		var (matches, candidates) = await FindAccessibleMatchesCoreAsync(NormalizePhones(phones), NormalizeEmails(emails), false,
+			retainedFamilyIds, includeApplications, true);
+		var matchedFamilyIds = matches.Select(match => match.FamilyId).ToHashSet();
+		return (matches, candidates.Where(applicant => matchedFamilyIds.Contains(applicant.FamilyId)).ToList());
+	}
 
-	private async Task<List<AdmissionDirectFamilyMatchDto>> FindAccessibleMatchesCoreAsync(string[] phones, string[] emails,
-		bool includeLegacyGuardians, Guid[]? retainedFamilyIds = null, bool includeApplications = true, bool activeSourcesOnly = false)
+	private async Task<(List<AdmissionDirectFamilyMatchDto> Families, List<AdmissionApplicant> Candidates)> FindAccessibleMatchesCoreAsync(
+		string[] phones, string[] emails, bool includeLegacyGuardians, Guid[]? retainedFamilyIds = null, bool includeApplications = true, bool activeSourcesOnly = false)
 	{
 		retainedFamilyIds ??= [];
-		if (phones.Length == 0 && emails.Length == 0 && retainedFamilyIds.Length == 0) return [];
+		var hasContacts = phones.Length != 0 || emails.Length != 0;
+		if (!hasContacts && retainedFamilyIds.Length == 0) return ([], []);
 		var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
 		if (!includeApplications) scopedApplications = scopedApplications.Where(_ => false);
 		var scopedInquiries = await inquiryScope.GetScopedQueryAsync();
@@ -105,46 +111,53 @@ public class AdmissionDirectFamilyMatchService(
 			applicant.TenantId == CurrentTenant.Id && (!activeSourcesOnly || applicant.Status == AdmissionApplicantStatus.Active) &&
 			(scopedApplications.Any(application => application.ApplicantId == applicant.Id) ||
 			 scopedInquiries.Any(inquiry => inquiry.ApplicantId == applicant.Id)));
-		var matchingGuardians = await guardians.GetListAsync(parent =>
+		var matchingGuardians = hasContacts ? await guardians.GetListAsync(parent =>
 			(parent.Relationship == AdmissionGuardianRelationship.Parent || includeLegacyGuardians && parent.IsPrimaryContact) &&
-			(Enumerable.Contains(phones, parent.Mobile) || parent.Email != null && Enumerable.Contains(emails, parent.Email.Trim().ToLower())));
+			(Enumerable.Contains(phones, parent.Mobile) || parent.Email != null && Enumerable.Contains(emails, parent.Email.Trim().ToLower()))) : [];
 		var matchedFamilyIds = matchingGuardians.Select(parent => parent.FamilyId).Concat(retainedFamilyIds).ToHashSet();
 		var studentQuery = await students.GetQueryableWithoutAutoIncludesAsync();
 		if (activeSourcesOnly)
 			visibleApplicants = await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingSourceVisibilityService>().ApplyAsync(visibleApplicants);
-		var matchingPhones = phones.Concat(phones.Select(phone => "91" + phone)).ToArray();
-		var matchingStudentIds = await AsyncExecuter.ToListAsync(studentQuery.Where(student => student.FamilyDetail != null &&
-			(student.FamilyDetail.FatherDetails != null &&
-				(student.FamilyDetail.FatherDetails.Email != null && Enumerable.Contains(emails, student.FamilyDetail.FatherDetails.Email.Trim().ToLower()) ||
-				 student.FamilyDetail.FatherDetails.ContactNo != null && Enumerable.Contains(matchingPhones, student.FamilyDetail.FatherDetails.ContactNo.Replace(" ", "").Replace("+", "").Replace("-", "").Replace("(", "").Replace(")", ""))) ||
-			 student.FamilyDetail.MotherDetails != null &&
-				(student.FamilyDetail.MotherDetails.Email != null && Enumerable.Contains(emails, student.FamilyDetail.MotherDetails.Email.Trim().ToLower()) ||
-				 student.FamilyDetail.MotherDetails.ContactNo != null && Enumerable.Contains(matchingPhones, student.FamilyDetail.MotherDetails.ContactNo.Replace(" ", "").Replace("+", "").Replace("-", "").Replace("(", "").Replace(")", "")))))
-			.Select(student => student.Id));
-		var linkedFamilyIds = await AsyncExecuter.ToListAsync(visibleApplicants.Where(applicant =>
-			applicant.ExistingStudentId.HasValue && matchingStudentIds.Contains(applicant.ExistingStudentId.Value) ||
-			matchingStudentIds.Contains(applicant.ReservedStudentId))
-			.Select(applicant => applicant.FamilyId).Distinct());
-		matchedFamilyIds.UnionWith(linkedFamilyIds);
-		var pendingMatches = await parentApplicants.GetParentContactMatchesAsync(emails, phones);
-		var pendingFamilyIds = await AsyncExecuter.ToListAsync(pendingMatches.Where(applicant =>
-			visibleApplicants.Any(visible => visible.Id == applicant.Id)).Select(applicant => applicant.FamilyId).Distinct());
-		matchedFamilyIds.UnionWith(pendingFamilyIds);
-		if (matchedFamilyIds.Count == 0) return [];
+		if (hasContacts)
+		{
+			var matchingPhones = phones.Concat(phones.Select(phone => "91" + phone)).ToArray();
+			var matchingStudentIds = await AsyncExecuter.ToListAsync(studentQuery.Where(student => student.FamilyDetail != null &&
+				(student.FamilyDetail.FatherDetails != null &&
+					(student.FamilyDetail.FatherDetails.Email != null && Enumerable.Contains(emails, student.FamilyDetail.FatherDetails.Email.Trim().ToLower()) ||
+					 student.FamilyDetail.FatherDetails.ContactNo != null && Enumerable.Contains(matchingPhones, student.FamilyDetail.FatherDetails.ContactNo.Replace(" ", "").Replace("+", "").Replace("-", "").Replace("(", "").Replace(")", ""))) ||
+				 student.FamilyDetail.MotherDetails != null &&
+					(student.FamilyDetail.MotherDetails.Email != null && Enumerable.Contains(emails, student.FamilyDetail.MotherDetails.Email.Trim().ToLower()) ||
+					 student.FamilyDetail.MotherDetails.ContactNo != null && Enumerable.Contains(matchingPhones, student.FamilyDetail.MotherDetails.ContactNo.Replace(" ", "").Replace("+", "").Replace("-", "").Replace("(", "").Replace(")", "")))))
+				.Select(student => student.Id));
+			if (matchingStudentIds.Count > 0)
+			{
+				var linkedFamilyIds = await AsyncExecuter.ToListAsync(visibleApplicants.Where(applicant =>
+					applicant.ExistingStudentId.HasValue && Enumerable.Contains(matchingStudentIds, applicant.ExistingStudentId.Value) ||
+					Enumerable.Contains(matchingStudentIds, applicant.ReservedStudentId))
+					.Select(applicant => applicant.FamilyId).Distinct());
+				matchedFamilyIds.UnionWith(linkedFamilyIds);
+			}
+			var pendingMatches = await parentApplicants.GetParentContactMatchesAsync(emails, phones);
+			var pendingFamilyIds = await AsyncExecuter.ToListAsync(pendingMatches.Where(applicant =>
+				visibleApplicants.Any(visible => visible.Id == applicant.Id)).Select(applicant => applicant.FamilyId).Distinct());
+			matchedFamilyIds.UnionWith(pendingFamilyIds);
+		}
+		if (matchedFamilyIds.Count == 0) return ([], []);
 		var ids = matchedFamilyIds.ToArray();
 		var familyApplicants = await AsyncExecuter.ToListAsync(visibleApplicants.Where(applicant => Enumerable.Contains(ids, applicant.FamilyId)));
 		var familyIds = familyApplicants.Select(applicant => applicant.FamilyId).Distinct().ToArray();
-		if (familyIds.Length == 0) return [];
+		if (familyIds.Length == 0) return ([], []);
 		var familyRows = await families.GetListAsync(family => Enumerable.Contains(familyIds, family.Id) && family.Status == AdmissionFamilyStatus.Active);
 		var familyGuardians = await guardians.GetListAsync(parent => Enumerable.Contains(familyIds, parent.FamilyId) && parent.IsPrimaryContact);
 		var existingIds = familyApplicants.Select(applicant => applicant.ExistingStudentId ?? applicant.ReservedStudentId).Distinct().ToArray();
 		var profiles = await AsyncExecuter.ToListAsync(studentQuery.Where(student => Enumerable.Contains(existingIds, student.Id))
 			.Select(student => new { student.Id, student.FamilyDetail }));
-		return familyRows.Select(family =>
+		var applicantsByFamily = familyApplicants.ToLookup(applicant => applicant.FamilyId);
+		var matches = familyRows.Select(family =>
 		{
 			var primary = familyGuardians.FirstOrDefault(parent => parent.Id == family.PrimaryGuardianId);
 			var parents = new List<AdmissionSiblingParentCandidateDto>();
-			foreach (var applicant in familyApplicants.Where(applicant => applicant.FamilyId == family.Id))
+			foreach (var applicant in applicantsByFamily[family.Id])
 			{
 				var applicantContact = AdmissionSiblingFamilyLink.HasOwnContact(applicant) ? AdmissionSiblingFamilyLink.OwnGuardian(applicant) : primary;
 				var currentStudent = profiles.FirstOrDefault(student => student.Id == (applicant.ExistingStudentId ?? applicant.ReservedStudentId));
@@ -168,12 +181,13 @@ public class AdmissionDirectFamilyMatchService(
 			{
 				FamilyId = family.Id, FamilyNumber = family.FamilyNumber,
 				PrimaryGuardianName = primary == null ? parents.FirstOrDefault()?.Name ?? string.Empty : string.Join(" ", new[] { primary.FirstName, primary.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
-				Applicants = familyApplicants.Where(applicant => applicant.FamilyId == family.Id).Select(applicant => string.Join(" ", new[] { applicant.FirstName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)))).ToList(),
+				Applicants = applicantsByFamily[family.Id].Select(applicant => string.Join(" ", new[] { applicant.FirstName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)))).ToList(),
 				Parents = parents, MatchByEmail = parents.Any(parent => parent.Email != null && emails.Contains(parent.Email.ToLowerInvariant())),
 				MatchByMobile = parents.Any(parent => parent.Mobile != null && phones.Contains(parent.Mobile)) ||
 					includeLegacyGuardians && matchingGuardians.Any(parent => parent.FamilyId == family.Id && phones.Contains(parent.Mobile))
 			};
 		}).Where(match => retainedFamilyIds.Contains(match.FamilyId) || match.MatchByEmail || match.MatchByMobile).ToList();
+		return (matches, familyApplicants);
 	}
 
 	private static AdmissionSiblingParentCandidateDto ReadParent(Guid applicantId, string prefix, Func<string, string?> read) =>

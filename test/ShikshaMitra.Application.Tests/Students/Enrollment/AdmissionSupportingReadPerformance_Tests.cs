@@ -53,9 +53,44 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					row.ConcurrencyStamp.ShouldNotBeNullOrWhiteSpace();
 				}
 				DirectReadCount(capture, "academic_Years").ShouldBe(2);
+				DirectReadCount(capture, "AppAdmissionCycles").ShouldBe(3);
 				capture.ReadCommands.ShouldNotContain(sql =>
 					sql.Contains("AppAdmissionOfferings", StringComparison.Ordinal) ||
 					sql.Contains("AppAdmissionApplications", StringComparison.Ordinal));
+
+				var duplicate = await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(new()
+				{
+					Name = "Different name with duplicate code", Code = draft.Code.ToLowerInvariant(),
+					AcademicYearId = source.AcademicYearId, StartDate = start, EndDate = start.AddDays(30)
+				}));
+				duplicate.Code.ShouldBe(AdmissionErrorCodes.CycleCodeAlreadyExists);
+			});
+		});
+
+	[Fact]
+	public Task Admission_period_page_loads_labels_and_scoped_counts_with_the_page() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var offering = await CreateOptionalIntakeOfferingAsync();
+			var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+				db.ChangeTracker.Clear();
+				using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
+				var service = GetRequiredService<IAdmissionCycleAppService>();
+				var page = await service.GetListAsync(new() { Search = cycle.Code, MaxResultCount = 1 });
+
+				page.TotalCount.ShouldBe(1);
+				var row = page.Items.ShouldHaveSingleItem();
+				row.Id.ShouldBe(cycle.Id);
+				row.AcademicYearName.ShouldNotBeNullOrWhiteSpace();
+				row.LinkedOfferingCount.ShouldBe(1);
+				row.ActiveOfferingCount.ShouldBe(offering.IsActive ? 1 : 0);
+				row.ApplicationCount.ShouldBe(0);
+				capture.ReadCommands.Count(sql => sql.Contains("\"AppAdmissionCycles\"", StringComparison.Ordinal) ||
+					sql.Contains("\"AppAdmissionOfferings\"", StringComparison.Ordinal) ||
+					sql.Contains("\"AppAdmissionApplications\"", StringComparison.Ordinal)).ShouldBe(2);
 			});
 		});
 

@@ -8,6 +8,14 @@
     <RootNamespace>ShikshaMitra</RootNamespace>
   </PropertyGroup>
 
+  <!-- Generated migration models make this compilation memory-intensive on hosted CI.
+       Keep the migration sources and analyzers intact while limiting compiler concurrency. -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <CompilerResponseFile Condition="'$(CompilerResponseFile)' == ''">$(MSBuildThisFileDirectory)../../scripts/local/backend-compiler.rsp</CompilerResponseFile>
+    <CscEnvironment>$(CscEnvironment);DOTNET_PROCESSOR_COUNT=1;DOTNET_GCConserveMemory=9;DOTNET_gcServer=0</CscEnvironment>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Superseded by the scaffolded 20260911071719 migration and its target model. -->
     <Compile Remove="Migrations\20260909160000_AddFeeStructureRevisions.cs" />

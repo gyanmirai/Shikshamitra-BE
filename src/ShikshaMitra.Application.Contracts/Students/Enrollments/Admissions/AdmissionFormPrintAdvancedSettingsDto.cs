@@ -151,6 +151,10 @@ public sealed class AdmissionPrintContentSettingsDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowInstructions { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionsPlacement { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionSection { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionHeadingSize { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionTextSize { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionTextWeight { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InstructionTextColor { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowChecklist { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChecklistPlacement { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowDeclaration { get; set; }

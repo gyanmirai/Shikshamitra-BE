@@ -67,6 +67,17 @@ public class AdmissionFormPrintSettings_Tests
 	}
 
 	[Fact]
+	public void Address_layout_roundtrips_and_invalid_choices_are_rejected()
+	{
+		var form = Form();
+		AdmissionFormMetadataStore.WriteExperience(form, Input("""{"advanced":{"header":{"addressLayout":"horizontal"}}}"""));
+		AdmissionFormAppService.Map(form, [], []).PrintSettings.Advanced!.Header!.AddressLayout.ShouldBe("horizontal");
+		Should.Throw<BusinessException>(() => AdmissionFormMetadataStore.WriteExperience(
+			form, Input("""{"advanced":{"header":{"addressLayout":"diagonal"}}}""")));
+		AdmissionFormAppService.Map(form, [], []).PrintSettings.Advanced!.Header!.AddressLayout.ShouldBe("horizontal");
+	}
+
+	[Fact]
 	public void Copy_used_for_clone_and_new_version_retains_independent_settings()
 	{
 		var source = Form();

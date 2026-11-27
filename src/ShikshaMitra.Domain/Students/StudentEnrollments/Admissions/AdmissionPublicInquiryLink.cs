@@ -1,5 +1,6 @@
 using System;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -7,6 +8,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string ProtectedTokenKey = "ProtectedPublicToken";
+
 	public Guid? TenantId { get; private set; }
 	public Guid AdmissionCycleId { get; private set; }
 	public Guid? CounsellorAssignmentProfileId { get; private set; }
@@ -41,6 +44,14 @@ public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public bool CanAccept(DateTime nowUtc) => IsActive &&
 		(!ExpiresAtUtc.HasValue || ExpiresAtUtc.Value > nowUtc.ToUniversalTime());
+
+	public string? FindProtectedToken() => this.GetProperty<string>(ProtectedTokenKey);
+
+	public void SetPublicToken(string tokenHash, string protectedToken)
+	{
+		TokenHash = Check.NotNullOrWhiteSpace(tokenHash, nameof(tokenHash), 64);
+		this.SetProperty(ProtectedTokenKey, Check.NotNullOrWhiteSpace(protectedToken, nameof(protectedToken)));
+	}
 
 	public void Revoke() => IsActive = false;
 

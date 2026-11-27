@@ -249,6 +249,10 @@ Registration's legacy System-bound `Guardian.Relationship` question can prefill 
 
 `PATCH /api/student/enrollment/admissions/public-inquiry-links/{id}/name` uses Offerings Add, accepts `name` and `concurrencyStamp`, and returns the updated link without its token. Create and rename reserve names tenant-wide across periods, including expired and revoked links. Matching ignores case and surrounding whitespace. A conflict returns HTTP 409 with `Admissions.PublicInquiryLinkNameExists`; existing duplicate records can be individually renamed without a data migration.
 
+`GET /api/student/enrollment/admissions/public-inquiry-links/{id}/copy-token` returns the token on demand with `Cache-Control: no-store`. It requires Offerings View and Add, the same tenant, and an active, unexpired link. New links store their lookup hash and a Data Protection-encrypted token in existing metadata. The API instances serving a deployment must share a persistent Data Protection key ring. List responses expose only `canCopy` metadata. If the protected token is missing or unreadable, the API returns `Admissions.PublicInquiry.CopyTokenUnavailable`.
+
+`POST /api/student/enrollment/admissions/public-inquiry-links/{id}/regenerate` applies the same permission and lifecycle checks. It accepts the current `concurrencyStamp` and replaces the token in place. The previous URL stops accepting inquiries when regeneration commits. Regeneration preserves the link record, configuration and expiry, and returns metadata without the token.
+
 Activity and timeline DTOs return `actorName`; completed workflow and Onboarding steps return `completedByName`, and Onboarding events return `actorName`. New activities/events/transitions snapshot the authenticated server actor. Historical rows resolve retained creator IDs in the current tenant where possible; missing attribution is not replaced by a former case owner.
 
 ## Admission student field contracts

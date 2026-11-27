@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Application.Communication;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -40,9 +41,11 @@ public class AdmissionPublicInquiryAppService(
 	AdmissionInquiryAvailabilityService availabilityService,
 	CommunicationAppService communications,
 	IDataFilter dataFilter, SchoolIdentityReadService schoolIdentity,
-	SchoolIdentityDocumentService identityDocuments) : ApplicationService, IAdmissionPublicInquiryAppService
+	SchoolIdentityDocumentService identityDocuments,
+	IDataProtectionProvider dataProtection) : ApplicationService, IAdmissionPublicInquiryAppService
 {
 	private const string LinkUnavailable = "Admissions.PublicInquiry.LinkUnavailable";
+	private const string CopyTokenUnavailable = "Admissions.PublicInquiry.CopyTokenUnavailable";
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
 	public async Task<List<AdmissionPublicInquiryLinkDto>> GetLinksAsync() =>
@@ -82,6 +85,7 @@ public class AdmissionPublicInquiryAppService(
 		var link = new AdmissionPublicInquiryLink(GuidGenerator.Create(), CurrentTenant.Id,
 			cycle.Id, null, input.Name, Hash(token), input.Source,
 			input.SourceDetail, input.ExpiresAtUtc, input.InquiryFormDefinitionId);
+		link.SetPublicToken(link.TokenHash, TokenProtector(link).Protect(token));
 		await links.InsertAsync(link, autoSave: true);
 		var result = new AdmissionPublicInquiryLinkCreatedDto
 		{
@@ -90,6 +94,7 @@ public class AdmissionPublicInquiryAppService(
 			InquiryFormDefinitionId = link.InquiryFormDefinitionId,
 			Name = link.Name, Source = link.Source, SourceDetail = link.SourceDetail,
 			ExpiresAtUtc = link.ExpiresAtUtc, IsActive = link.IsActive,
+			CanCopy = true,
 			ConcurrencyStamp = link.ConcurrencyStamp
 		};
 		return result;
@@ -107,6 +112,57 @@ public class AdmissionPublicInquiryAppService(
 		await links.UpdateAsync(link, autoSave: true);
 		return Map(link);
 	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	public async Task<AdmissionPublicInquiryLinkTokenDto> GetCopyTokenAsync(Guid id)
+	{
+		var link = await FindActiveTenantLinkAsync(id);
+		var protectedToken = link.FindProtectedToken();
+		if (!string.IsNullOrEmpty(protectedToken))
+		{
+			try
+			{
+				var token = TokenProtector(link).Unprotect(protectedToken);
+				if (string.Equals(Hash(token), link.TokenHash, StringComparison.Ordinal))
+					return new AdmissionPublicInquiryLinkTokenDto { Token = token };
+			}
+			catch (Exception exception) when (exception is CryptographicException or FormatException)
+			{
+				// The key may no longer be available. An explicit regeneration can replace this token.
+			}
+		}
+		throw new BusinessException(CopyTokenUnavailable);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[UnitOfWork(isTransactional: true)]
+	public async Task<AdmissionPublicInquiryLinkDto> RegenerateLinkAsync(Guid id, RegenerateAdmissionPublicInquiryLinkDto input)
+	{
+		await LazyServiceProvider.LazyGetRequiredService<IAdmissionPublicInquirySubmissionLock>()
+			.AcquireAsync(CurrentTenant.Id, id);
+		var link = await FindActiveTenantLinkAsync(id);
+		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || link.ConcurrencyStamp != input.ConcurrencyStamp)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+		link.SetPublicToken(Hash(token), TokenProtector(link).Protect(token));
+		await links.UpdateAsync(link, autoSave: true);
+		return Map(link);
+	}
+
+	private async Task<AdmissionPublicInquiryLink> FindActiveTenantLinkAsync(Guid id)
+	{
+		var tenantId = CurrentTenant.Id;
+		var link = await links.FindAsync(item => item.Id == id && item.TenantId == tenantId)
+			?? throw new EntityNotFoundException(typeof(AdmissionPublicInquiryLink), id);
+		if (!link.CanAccept(Clock.Now))
+			throw new BusinessException(LinkUnavailable);
+		return link;
+	}
+
+	private IDataProtector TokenProtector(AdmissionPublicInquiryLink link) =>
+		dataProtection.CreateProtector("AdmissionPublicInquiryLink.v1", link.TenantId?.ToString("D") ?? "host", link.Id.ToString("D"));
 
 	private async Task EnsureLinkNameAvailableAsync(string name, Guid? excludingId = null)
 	{
@@ -262,9 +318,11 @@ public class AdmissionPublicInquiryAppService(
 			input = AdmissionPublicInquirySubmissionStore.ProjectInput(input, source, projected);
 			var fingerprint = AdmissionPublicInquirySubmissionStore.Fingerprint(input, projected);
 			await LazyServiceProvider.LazyGetRequiredService<IAdmissionPublicInquirySubmissionLock>().AcquireAsync(link.TenantId, link.Id);
-			// Re-read scalar eligibility after waiting: tracked objects may predate a revocation.
+			// Re-read scalar eligibility after waiting, including whether this token is still current.
 			var now = Clock.Now;
+			var tokenHash = Hash(token);
 			if (!await AsyncExecuter.AnyAsync((await links.GetQueryableAsync()).Where(item => item.Id == link.Id && item.IsActive &&
+				item.TokenHash == tokenHash &&
 				item.AdmissionCycleId == cycle.Id && (!item.InquiryFormDefinitionId.HasValue || item.InquiryFormDefinitionId == sourceId) &&
 				(!item.ExpiresAtUtc.HasValue || item.ExpiresAtUtc > now))) ||
 				!await AsyncExecuter.AnyAsync((await cycles.GetQueryableAsync()).Where(item => item.Id == cycle.Id && item.Status == AdmissionCycleStatus.Published &&
@@ -382,6 +440,7 @@ public class AdmissionPublicInquiryAppService(
 		SourceDetail = link.SourceDetail,
 		ExpiresAtUtc = link.ExpiresAtUtc,
 		IsActive = link.IsActive,
+		CanCopy = !string.IsNullOrEmpty(link.FindProtectedToken()),
 		ConcurrencyStamp = link.ConcurrencyStamp
 	};
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,6 +9,7 @@ using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp;
 
 namespace ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.Admissions;
 
@@ -26,6 +28,9 @@ public class EfCoreAdmissionApplicationNumberingRepository(IDbContextProvider<Sh
 	public async Task<AdmissionApplicationNumberingRule?> GetCurrentAsync() =>
 		await (await provider.GetDbContextAsync()).Set<AdmissionApplicationNumberingRule>().AsNoTracking()
 			.Where(x => x.StoredTenantId == StoredTenantId).OrderByDescending(x => x.Version).FirstOrDefaultAsync();
+	public async Task<List<AdmissionApplicationNumberingRule>> GetHistoryAsync() =>
+		await (await provider.GetDbContextAsync()).Set<AdmissionApplicationNumberingRule>().AsNoTracking()
+			.Where(x => x.StoredTenantId == StoredTenantId).OrderByDescending(x => x.Version).ToListAsync();
 	public async Task<bool> HasIssuedAsync() => await (await provider.GetDbContextAsync()).Set<AdmissionApplicationNumberCounter>()
 		.AnyAsync(x => x.StoredTenantId == StoredTenantId);
 	public async Task InsertRuleAsync(AdmissionApplicationNumberingRule rule)
@@ -58,6 +63,8 @@ public class EfCoreAdmissionApplicationNumberingRepository(IDbContextProvider<Sh
 		var counter = await db.Set<AdmissionApplicationNumberCounter>().AsNoTracking()
 			.SingleOrDefaultAsync(x => x.StoredTenantId == StoredTenantId && x.ScopeKey == scopeKey);
 		var next = Math.Max(rule.StartingNumber, counter?.NextValue ?? 1);
+		if (rule.GetSeriesVersion().HasValue)
+			return await FindNextAvailableAsync(db, rule, yearText, next);
 		// Once adopted, registrations only advance this counter; do not rescan history on every allocation.
 		if (counter?.LastRuleVersion == rule.Version && counter.LastYearText == yearText) return next;
 		var legacy = db.Set<AdmissionReferenceSequence>().AsNoTracking()
@@ -90,6 +97,40 @@ public class EfCoreAdmissionApplicationNumberingRepository(IDbContextProvider<Sh
 			next = Math.Max(next, checked(highest + 1));
 		}
 		return next;
+	}
+	private async Task<long> FindNextAvailableAsync(ShikshaMitraDbContext db,
+		AdmissionApplicationNumberingRule rule, string yearText, long next)
+	{
+		// Check bounded batches to find the first unused exact number without loading
+		// the entire school's application history into memory.
+		while (true)
+		{
+			const int batchSize = 100;
+			var candidates = new List<string>(batchSize);
+			for (var offset = 0; offset < batchSize; offset++)
+			{
+				try
+				{
+					candidates.Add(rule.Format(checked(next + offset), yearText));
+				}
+				catch (Exception exception) when (exception is BusinessException or OverflowException)
+				{
+					if (candidates.Count == 0) throw;
+					break;
+				}
+			}
+			var candidateArray = candidates.ToArray();
+			var existing = await db.Set<AdmissionApplication>().IgnoreQueryFilters().AsNoTracking()
+				.Where(application => application.TenantId == tenant.Id &&
+					Enumerable.Contains(candidateArray, application.ApplicationNumber))
+				.Select(application => application.ApplicationNumber).ToListAsync();
+			var used = existing.ToHashSet(StringComparer.Ordinal);
+			for (var index = 0; index < candidates.Count; index++)
+			{
+				if (!used.Contains(candidates[index])) return checked(next + index);
+			}
+			next = checked(next + candidates.Count);
+		}
 	}
 	private static long ReadLegacySequence(string number)
 	{

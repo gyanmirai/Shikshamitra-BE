@@ -37,6 +37,8 @@ Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retain
 
 Offering validation errors retain `code`/`message` and optionally include `formDefinitionId`, `formName`, `formPurpose`, `workflowDefinitionId`, `workflowStageId`, and `workflowStageName` for actionable recovery. Failed activation writes include `ConfigurationErrors`, `ValidationErrors` and `ValidationMessages` in business-error data. Archived form errors identify restore/replacement actions; inherited Inquiry approval remains required in the Registration form. Restore rejects non-archived states, invalid immutable definitions, stale stamps, unauthorized access and other-tenant IDs.
 
+`Admissions.FormRestoreInvalidDefinition` returns a localized recovery message that directs staff to Clone as Draft and publish a corrected replacement. Diagnostic validation entries remain in `data.Errors` for clients to interpret.
+
 Form version writes retain Forms Add/Update access. `Admissions.FormVersionSourceRequired` identifies a Draft source; `Admissions.FormDraftAlreadyExists` includes `DraftId` for the existing same-family draft; `Admissions.FormVersionCodeImmutable` rejects changing a version's family code. These are HTTP 400 business validations with corrective messages. Version comparison reads from the first form ID to the second and returns an empty `changes` list when the definitions are equivalent. It never rewrites either definition or captured answers. Change messages use configured field labels and section names, include both names for a rename, and use `Unnamed field` / `Unnamed section` for legacy missing names. The response also includes `fieldChanges` with a zero-based `changeIndex` into `changes`, a section code for grouping, and the display names and kind for each field change. Internal codes continue to match definitions but are not displayed as change descriptions.
 
 Publication readiness reports `Admissions.FormVersionUnchanged:<version>` when a valid Inquiry or Registration draft matches its latest Published version. The publish endpoint independently rejects the same condition with HTTP 400, code `Admissions.FormVersionUnchanged` and business data containing `Version` and `Reason`. Draft saves and in-place restore retain their existing contracts.
@@ -80,10 +82,13 @@ The endpoint is implemented by `Application/Students/Portal/MobileStudentProfile
 | Endpoint | Permission | Contract |
 |---|---|---|
 | `GET /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.View` | Current school-wide rule, `expectedVersion`, `isConfigured`, `sequenceLocked`; unconfigured schools receive the legacy APP/calendar-year defaults. |
+| `GET /api/student/enrollment/admissions/application-numbering/history` | `Students.Admissions.View` | Immutable school-specific revisions, newest first, with creation time, staff display name and numbering fields; earlier implicit legacy defaults have no saved revision. |
 | `PUT /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.Add` | `expectedVersion`, `prefix`, `separator`, `suffix`, `yearFormat`, `resetPolicy`, `digits`, `startingNumber`; returns the saved immutable revision. |
 | `POST /api/student/enrollment/admissions/application-numbering/preview` | `Students.Admissions.View` | Same draft fields plus optional `academicYearId` (required for academic-year format/reset). Returns `nextNumber` and `nextSequence` from the allocation calculation without saving a rule, reserving a number or creating a counter. Stale `expectedVersion` returns `.Changed`. |
 
-Year format: 0 none, 1 UTC calendar year, 2 offering-period academic year (`YYYY-YY`). Reset policy: 0 continuous, 1 calendar year, 2 academic year. Yearly resets require the matching year token. Prefix is 1–20 ASCII letters/digits/hyphens, suffix 0–20; separators are `/`, `-`, or empty; digits 1–12; starting number 1–999999999. Starting number/reset policy lock after first custom issuance. Stale saves return `Students.Admissions.Numbering.Changed`; invalid combinations use `.Invalid`; sequence changes after issuance use `.SequenceLocked`. Existing action permissions and registration permissions are unchanged.
+Year format: 0 none, 1 UTC calendar year, 2 offering-period academic year (`YYYY-YY`). Reset policy: 0 continuous, 1 calendar year, 2 academic year. Yearly resets require the matching year token. Prefix is optional, with up to 20 ASCII letters/digits/hyphens; suffix accepts 0–20; separators are `/`, `-`, or empty; digits 1–12; starting number 1–999999999. Legacy saves without an explicit new series retain the starting-number and reset-policy lock after first custom issuance. Stale saves return `Students.Admissions.Numbering.Changed`; invalid combinations use `.Invalid`; locked legacy sequence changes use `.SequenceLocked`. Existing action permissions and registration permissions are unchanged.
+
+The optional `beginNewSeries` flag on save and preview starts an explicitly selected numbering series at the requested starting number, with independently scoped counters and the first unused exact formatted number. Empty prefixes are accepted, and no separator is added before the first part. Preview returns `startingNumberUnavailable` when the formatted starting number already exists. Collision checks include soft-deleted applications and run under the existing tenant transaction lock; the tenant and application-number unique index remains the final guard. Existing rules and clients omitting the flag retain the legacy counter, carry-forward and locking behavior. Rule revisions store their series marker in existing extensible metadata and require no schema migration.
 
 Apply `AddAdmissionApplicationNumbering` before starting the updated API. The migration adds rule/counter tables only and does not rewrite applications or seed school settings.
 
@@ -680,6 +685,8 @@ Omitting the settings on an older-client update retains the saved settings; lega
 Omitting only `template` while updating other print settings retains the current saved template.
 Omitting `advanced` or sending it as null preserves the saved advanced configuration; sending `{}` explicitly resets it. Nullable child members are omitted from JSON. Advanced groups are `paper`, `border`, `style`, `branding`, `header`, `photo`, `footer`, `flow`, `sections`, `fields`, `content` and `copies`; no executable content or arbitrary style declarations are accepted.
 
+`advanced.flow.smartPageFitting` and `advanced.sections[code].keepTogether` are optional booleans retained with the form's print settings. Section `startNewPage` and `keepHeading` remain independently configurable. Rendering and page fitting are performed by the frontend PDF generator.
+
 | Advanced setting | Server bounds |
 |---|---|
 | Page margins / border inset | 5–30 mm / 2–25 mm |
@@ -692,6 +699,7 @@ Omitting `advanced` or sending it as null preserves the saved advanced configura
 | Section columns / blank rows / field writing lines | 1–4 / 1–30 / 1–8 |
 | Instructions and declaration | Up to 2000 characters per translated value |
 | Titles, captions, signature labels and checklist items | Up to 128 characters; at most 20 checklist items per language |
+| `advanced.content.translations[language].customSignatureLabels` | Optional ordered list of up to 4 labels, each up to 128 characters. Empty strings are allowed for draft entries. |
 | Translations / colours | Up to 8 valid language codes / `#RRGGBB` |
 
 `advanced.header.layout` optionally maps `logo`, `banner`, `schoolName`, `address`, `phone`, `email`, `website`, `title`, `subtitle`, `board`, `medium`, `class`, `academicYear`, `registrationNumber`, `date` and `photo` to rectangles with `x`, `y`, `width`, `height` and optional `lockAspectRatio`. Map keys are case-sensitive. An omitted layout uses the existing template placements.

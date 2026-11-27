@@ -185,6 +185,50 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	});
 
+	[Fact]
+	public Task Form_restore_rejects_legacy_inquiry_definition_without_modifying_it() => RunCertificationScenarioAsync(async () =>
+	{
+		var id = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var form = new AdmissionFormDefinition(id, TestTenantId, "Legacy inquiry form",
+				$"LEGACY_{id:N}"[..24], AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
+			form.Publish(TestUserId);
+			form.Archive();
+			await _formRepository.InsertAsync(form, autoSave: true);
+			var section = new AdmissionFormSectionDefinition(Guid.NewGuid(), id, "CONTACT", "Contact details", 0, null);
+			await _formSectionRepository.InsertAsync(section, autoSave: true);
+			var fields = new (string Code, string Label, AdmissionFormFieldType Type, string Binding, string? Options)[]
+			{
+				("STUDENT_NAME", "Student name", AdmissionFormFieldType.Text, "Applicant.Name", null),
+				("FATHER_NAME", "Father name", AdmissionFormFieldType.Text, "Father.Name", null),
+				("FATHER_MOBILE", "Father mobile", AdmissionFormFieldType.Phone, "Father.Mobile", null),
+				("MOTHER_NAME", "Mother name", AdmissionFormFieldType.Text, "Mother.Name", null),
+				("MOTHER_MOBILE", "Mother mobile", AdmissionFormFieldType.Phone, "Mother.Mobile", null),
+				("APPLICANT_GENDER", "Applicant gender", AdmissionFormFieldType.Select, "Applicant.Gender",
+					"""[{"value":"Male","label":"Male"},{"value":"Female","label":"Female"},{"value":"OPTION_3","label":"Other"}]""")
+			};
+			foreach (var (field, index) in fields.Select((field, index) => (field, index)))
+			{
+				await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(Guid.NewGuid(), id, section.Id,
+					field.Code, field.Label, field.Type, AdmissionFormBindingType.System, field.Binding, true, false,
+					index, null, null, null, null, null, field.Options), autoSave: true);
+			}
+		});
+
+		var service = GetRequiredService<IAdmissionFormAppService>();
+		var before = await service.GetAsync(id);
+		var failure = await Should.ThrowAsync<BusinessException>(() => service.RestoreAsync(id, before.ConcurrencyStamp));
+		failure.Code.ShouldBe(AdmissionFormErrorCodes.RestoreInvalidDefinition);
+		failure.Data["Errors"].ShouldBeOfType<string>().ShouldBe(
+			$"{AdmissionInquiryConfiguredFields.MissingSelector}; {AdmissionFormErrorCodes.InvalidOptions}:APPLICANT_GENDER");
+		var after = await service.GetAsync(id);
+		after.Status.ShouldBe(AdmissionFormStatus.Archived);
+		after.ConcurrencyStamp.ShouldBe(before.ConcurrencyStamp);
+		JsonSerializer.Serialize(after.Sections).ShouldBe(JsonSerializer.Serialize(before.Sections));
+		(await service.GetAuditAsync(id)).ShouldNotContain(entry => entry.Action == "Restored");
+	});
+
 	private Task PrepareRestorableInquiryFormAsync(AdmissionOffering offering) => WithUnitOfWorkAsync(async () =>
 	{
 		var id = offering.InquiryFormDefinitionId!.Value;

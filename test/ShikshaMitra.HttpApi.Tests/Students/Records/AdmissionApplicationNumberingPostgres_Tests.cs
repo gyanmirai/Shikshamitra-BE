@@ -91,6 +91,8 @@ public class AdmissionApplicationNumberingAuthorization_Tests
 	[InlineData(typeof(AdmissionApplicationNumberingAppService), "SaveAsync", "Students.Admissions.Add")]
 	[InlineData(typeof(AdmissionApplicationNumberingAppService), "PreviewAsync", "Students.Admissions.View")]
 	[InlineData(typeof(AdmissionApplicationNumberingController), "Get", "Students.Admissions.View")]
+	[InlineData(typeof(AdmissionApplicationNumberingController), "GetHistory", "Students.Admissions.View")]
+	[InlineData(typeof(AdmissionApplicationNumberingAppService), "GetHistoryAsync", "Students.Admissions.View")]
 	[InlineData(typeof(AdmissionApplicationNumberingController), "Save", "Students.Admissions.Add")]
 	[InlineData(typeof(AdmissionApplicationNumberingController), "Preview", "Students.Admissions.View")]
 	public void Numbering_authorization_guards_owning_action_at_both_entry_points(Type type, string method, string policy)

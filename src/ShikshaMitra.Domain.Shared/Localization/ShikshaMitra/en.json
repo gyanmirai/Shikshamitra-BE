@@ -250,7 +250,7 @@
         "Admissions.FormInUse": "Cannot delete this draft while it has linked records: offerings {OfferingCount}, applications {ApplicationCount}, public inquiry links {PublicLinkCount}.",
         "Admissions.FormConcurrencyConflict": "This admission form changed after the list loaded. Refresh and try again.",
         "Admissions.FormArchivedRequired": "Only an archived form can be restored. Refresh the form list and check its current status.",
-        "Admissions.FormRestoreInvalidDefinition": "This form cannot be restored because its configuration needs attention: {Errors}. Clone it as a draft, correct the highlighted settings and publish a replacement.",
+        "Admissions.FormRestoreInvalidDefinition": "This archived form cannot be restored with its current settings. Choose Clone as Draft, fix the form settings, and publish the replacement.",
         "Admissions.OfferingFormNotPublished": "{Reason}",
         "Admissions.OfferingWorkflowNotPublished": "{Reason}",
         "Admissions.Offering.Inactive": "This admission offering is inactive. Ask an admission administrator to activate it before starting a new inquiry or registration.",

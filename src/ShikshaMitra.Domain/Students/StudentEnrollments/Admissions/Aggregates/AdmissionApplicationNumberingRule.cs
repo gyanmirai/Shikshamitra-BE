@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -29,7 +30,7 @@ public class AdmissionApplicationNumberingRule : CreationAuditedAggregateRoot<Gu
 	{
 		prefix = (prefix ?? "").Trim().ToUpperInvariant();
 		suffix = (suffix ?? "").Trim().ToUpperInvariant();
-		if (!Regex.IsMatch(prefix, "^[A-Z0-9][A-Z0-9-]{0,19}$") || !Regex.IsMatch(suffix, "^[A-Z0-9-]{0,20}$") ||
+		if (!Regex.IsMatch(prefix, "^([A-Z0-9][A-Z0-9-]{0,19})?$") || !Regex.IsMatch(suffix, "^[A-Z0-9-]{0,20}$") ||
 			separator is not ("/" or "-" or "") || !Enum.IsDefined(yearFormat) || !Enum.IsDefined(resetPolicy) ||
 			digits is < 1 or > 12 || startingNumber is < 1 or > 999999999 ||
 			(resetPolicy == AdmissionNumberResetPolicy.AcademicYear && yearFormat != AdmissionNumberYearFormat.AcademicYear) ||
@@ -48,14 +49,37 @@ public class AdmissionApplicationNumberingRule : CreationAuditedAggregateRoot<Gu
 		_ => ""
 	};
 
-	public string ScopeKey(int calendarYear, Guid academicYearId) => ResetPolicy switch
-	{
-		AdmissionNumberResetPolicy.CalendarYear => $"calendar:{calendarYear}",
-		AdmissionNumberResetPolicy.AcademicYear => $"academic:{academicYearId:N}",
-		_ => "continuous"
-	};
+	// Series identity is stored in the existing extensible metadata to keep historic rows readable.
+	public int? GetSeriesVersion() =>
+		int.TryParse(this.GetProperty<string>("NumberingSeriesVersion"), out var version) ? version : null;
+	public void SetSeriesVersion(int version) =>
+		this.SetProperty("NumberingSeriesVersion", version.ToString(CultureInfo.InvariantCulture));
 
-	public string NumberPrefix(string year) => string.Join(Separator, new[] { Prefix, year }.Where(x => x.Length > 0)) + Separator;
+	public string ScopeKey(int calendarYear, Guid academicYearId)
+	{
+		var series = GetSeriesVersion();
+		if (series.HasValue)
+		{
+			return ResetPolicy switch
+			{
+				AdmissionNumberResetPolicy.CalendarYear => $"s{series}:c{calendarYear}",
+				AdmissionNumberResetPolicy.AcademicYear => $"s{series}:a{academicYearId:N}",
+				_ => $"s{series}:continuous"
+			};
+		}
+		return ResetPolicy switch
+		{
+			AdmissionNumberResetPolicy.CalendarYear => $"calendar:{calendarYear}",
+			AdmissionNumberResetPolicy.AcademicYear => $"academic:{academicYearId:N}",
+			_ => "continuous"
+		};
+	}
+
+	public string NumberPrefix(string year)
+	{
+		var parts = new[] { Prefix, year }.Where(x => x.Length > 0).ToArray();
+		return parts.Length == 0 ? "" : string.Join(Separator, parts) + Separator;
+	}
 	public string NumberSuffix => Suffix.Length == 0 ? "" : Separator + Suffix;
 	public string Format(long sequence, string year)
 	{

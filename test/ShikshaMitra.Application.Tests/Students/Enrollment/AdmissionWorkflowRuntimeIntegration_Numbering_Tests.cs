@@ -14,6 +14,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private static SaveAdmissionApplicationNumberingDto NumberingInput(int version = 0, string prefix = "DDVS") => new()
 	{ ExpectedVersion = version, Prefix = prefix, Separator = "/", YearFormat = AdmissionNumberYearFormat.AcademicYear,
 		ResetPolicy = AdmissionNumberResetPolicy.AcademicYear, Digits = 5, StartingNumber = 1 };
+	[Fact]
+	public Task Numbering_history_lists_school_revisions_newest_first() => RunCertificationScenarioAsync(async () =>
+	{
+		var settings = GetRequiredService<IAdmissionApplicationNumberingAppService>();
+		await settings.SaveAsync(NumberingInput());
+		await settings.SaveAsync(NumberingInput(1, "SCHOOL"));
+		var history = await settings.GetHistoryAsync();
+		history.Count.ShouldBe(2);
+		history[0].Version.ShouldBe(2);
+		history[0].Prefix.ShouldBe("SCHOOL");
+		history[0].ChangedByName.ShouldNotBeNullOrWhiteSpace();
+		history[1].Version.ShouldBe(1);
+		history[1].Prefix.ShouldBe("DDVS");
+		using (_currentTenant.Change(Guid.NewGuid()))
+			(await settings.GetHistoryAsync()).ShouldBeEmpty();
+	});
 	[Theory]
 	[InlineData(AdmissionTrack.Rte)] [InlineData(AdmissionTrack.Management)] [InlineData(AdmissionTrack.Staff)]
 	public Task Numbering_special_registration_uses_school_format_and_replays_without_renumbering(AdmissionTrack track) => RunCertificationScenarioAsync(async () =>
@@ -62,6 +78,98 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var changed = NumberingInput(1); changed.StartingNumber = 20;
 		(await Should.ThrowAsync<BusinessException>(() => settings.SaveAsync(changed))).Code.ShouldBe(AdmissionNumberingErrorCodes.SequenceLocked);
 		(await settings.GetAsync()).ExpectedVersion.ShouldBe(1);
+	});
+	[Fact]
+	public Task Numbering_new_series_starts_at_first_unused_and_preserves_existing_numbers() => RunCertificationScenarioAsync(async () =>
+	{
+		var settings = GetRequiredService<IAdmissionApplicationNumberingAppService>();
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var input = new PreviewAdmissionApplicationNumberingDto
+		{
+			Prefix = "", Separator = "-", Digits = 3, StartingNumber = 1,
+			YearFormat = AdmissionNumberYearFormat.None,
+			ResetPolicy = AdmissionNumberResetPolicy.Continuous, BeginNewSeries = true
+		};
+		(await settings.PreviewAsync(input)).NextNumber.ShouldBe("001");
+		await settings.SaveAsync(input);
+		var savedRule = await WithUnitOfWorkAsync(() =>
+			GetRequiredService<IAdmissionApplicationNumberingRepository>().GetCurrentAsync());
+		savedRule!.GetSeriesVersion().ShouldBe(1);
+		input.ExpectedVersion = 1;
+		input.BeginNewSeries = false;
+		(await settings.PreviewAsync(input)).NextNumber.ShouldBe("001");
+		var first = await StartFixtureApplicationAsync((await CreateApplicantAsync("Series one")).Id, offering.Id);
+		first.ApplicationNumber.ShouldBe("001");
+
+		input.BeginNewSeries = true;
+		input.StartingNumber = 3;
+		await settings.SaveAsync(input);
+		var third = await StartFixtureApplicationAsync((await CreateApplicantAsync("Series three")).Id, offering.Id);
+		third.ApplicationNumber.ShouldBe("003");
+
+		input.ExpectedVersion = 2;
+		input.StartingNumber = 1;
+		var preview = await settings.PreviewAsync(input);
+		preview.NextNumber.ShouldBe("002");
+		preview.StartingNumberUnavailable.ShouldBeTrue();
+		(await settings.PreviewAsync(input)).NextNumber.ShouldBe("002");
+		await settings.SaveAsync(input);
+		var second = await StartFixtureApplicationAsync((await CreateApplicantAsync("Series two")).Id, offering.Id);
+		second.ApplicationNumber.ShouldBe("002");
+		input.ExpectedVersion = 3;
+		input.BeginNewSeries = false;
+		(await settings.PreviewAsync(input)).NextNumber.ShouldBe("004");
+		var fourth = await StartFixtureApplicationAsync((await CreateApplicantAsync("Series four")).Id, offering.Id);
+		fourth.ApplicationNumber.ShouldBe("004");
+		(await _applicationAppService.GetAsync(first.Id)).ApplicationNumber.ShouldBe("001");
+		(await _applicationAppService.GetAsync(third.Id)).ApplicationNumber.ShouldBe("003");
+		await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionApplication, Guid>>().DeleteAsync(first.Id));
+		input.BeginNewSeries = true;
+		var afterDelete = await settings.PreviewAsync(input);
+		afterDelete.NextNumber.ShouldBe("005");
+		afterDelete.StartingNumberUnavailable.ShouldBeTrue();
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			input.ExpectedVersion = 0;
+			(await settings.PreviewAsync(input)).NextNumber.ShouldBe("001");
+		}
+	});
+	[Fact]
+	public Task Numbering_existing_school_can_explicitly_change_cycle_and_start_a_new_series() => RunCertificationScenarioAsync(async () =>
+	{
+		var settings = GetRequiredService<IAdmissionApplicationNumberingAppService>();
+		await settings.SaveAsync(NumberingInput());
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var old = await StartFixtureApplicationAsync((await CreateApplicantAsync("Existing series")).Id, offering.Id);
+		(await settings.GetAsync()).SequenceLocked.ShouldBeTrue();
+		var input = new PreviewAdmissionApplicationNumberingDto
+		{
+			ExpectedVersion = 1, BeginNewSeries = true, Prefix = "", Separator = "-",
+			YearFormat = AdmissionNumberYearFormat.None, ResetPolicy = AdmissionNumberResetPolicy.Continuous,
+			Digits = 3, StartingNumber = 1
+		};
+		(await settings.PreviewAsync(input)).NextNumber.ShouldBe("001");
+		await settings.SaveAsync(input);
+		var next = await StartFixtureApplicationAsync((await CreateApplicantAsync("New series")).Id, offering.Id);
+		next.ApplicationNumber.ShouldBe("001");
+		(await _applicationAppService.GetAsync(old.Id)).ApplicationNumber.ShouldBe(old.ApplicationNumber);
+	});
+	[Fact]
+	public Task Numbering_preview_checks_short_valid_candidates_before_format_length_limit() => RunCertificationScenarioAsync(async () =>
+	{
+		var rule = new AdmissionApplicationNumberingRule(Guid.NewGuid(), TestTenantId, 1,
+			"ABCDEFGHIJKLMNOPQRST", "-", "ABCDEFGHIJKLMNOPQRST", AdmissionNumberYearFormat.AcademicYear,
+			AdmissionNumberResetPolicy.AcademicYear, 12, 1);
+		rule.SetSeriesVersion(1);
+		var yearId = Guid.NewGuid();
+		var scope = rule.ScopeKey(2026, yearId);
+		const long nearLimit = 99999999999998L;
+		await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionApplicationNumberCounter, Guid>>()
+			.InsertAsync(new AdmissionApplicationNumberCounter(Guid.NewGuid(), TestTenantId, scope, nearLimit)));
+		var next = await WithUnitOfWorkAsync(() => GetRequiredService<IAdmissionApplicationNumberingRepository>()
+			.PeekNextAsync(rule, scope, "2026-27"));
+		next.ShouldBe(nearLimit);
+		rule.Format(next, "2026-27").Length.ShouldBe(64);
 	});
 	[Fact]
 	public Task Numbering_adopting_existing_format_continues_above_issued_numbers() => RunCertificationScenarioAsync(async () =>

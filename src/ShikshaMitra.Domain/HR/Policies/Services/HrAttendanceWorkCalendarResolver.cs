@@ -23,17 +23,40 @@ public class HrAttendanceWorkCalendarResolver(
 	: DomainService
 {
 	private Dictionary<string, object>? readBatch;
-	public IDisposable BeginReadBatch(IEnumerable<Employee> employees)
+	private List<AcademicYear>? batchYears;
+
+	public async Task<IDisposable> BeginReadBatchAsync(
+		IEnumerable<Employee> employees, DateOnly start, DateOnly end)
 	{
 		var previous = readBatch;
-		readBatch = employees.ToDictionary(x => "employee:" + x.Id, x => (object) x);
-		var assignments = assignmentResolver.BeginReadBatch();
-		return new Volo.Abp.DisposeAction(() => { readBatch = previous; assignments.Dispose(); });
+		var previousYears = batchYears;
+		var firstDay = start.ToDateTime(TimeOnly.MinValue);
+		var lastDay = end.ToDateTime(TimeOnly.MinValue);
+		var years = await academicYearRepository.GetQueryableAsync();
+		batchYears = await AsyncExecuter.ToListAsync(years
+			.Where(year => year.StartDate <= lastDay && year.EndDate >= firstDay)
+			.OrderByDescending(year => year.StartDate).ThenBy(year => year.Id));
+		readBatch = employees.ToDictionary(x => "employee:" + x.Id, x => (object) Task.FromResult(x));
+		var assignments = assignmentResolver.BeginReadBatch((firstDay, lastDay));
+		return new DisposeAction(() =>
+		{
+			readBatch = previous;
+			batchYears = previousYears;
+			assignments.Dispose();
+		});
 	}
-	private async Task<T> ReadAsync<T>(string key, Func<Task<T>> load) where T : notnull
+
+	private Task<T> ReadAsync<T>(string key, Func<Task<T>> load) where T : notnull
 	{
-		if (readBatch != null && readBatch.TryGetValue(key, out var value)) return (T) value;
-		var result = await load(); if (readBatch != null) readBatch[key] = result; return result;
+		if (readBatch == null) return load();
+		// Cache failed configuration reads for this request too. The register can use
+		// its existing holiday fallback without repeating the same database query.
+		if (!readBatch.TryGetValue(key, out var value))
+		{
+			value = load();
+			readBatch.Add(key, value);
+		}
+		return (Task<T>) value;
 	}
 	public async Task<WorkCalendarPolicy> ResolveAsync(
 		Guid employeeId,
@@ -48,7 +71,8 @@ public class HrAttendanceWorkCalendarResolver(
 			employee,
 			resolvedAcademicYearId,
 			date.Date,
-			cancellationToken);
+			cancellationToken,
+			includeSteps: false);
 		var attendancePolicy = resolution.Assignment is null
 			? await ReadAsync("default:" + resolvedAcademicYearId, () => ResolveDefaultAttendancePolicyAsync(resolvedAcademicYearId, cancellationToken))
 			: await ReadAsync("policy:" + resolution.Assignment.AttendancePolicyId, () => attendancePolicyRepository.GetAsync(resolution.Assignment.AttendancePolicyId, cancellationToken: cancellationToken));
@@ -64,11 +88,18 @@ public class HrAttendanceWorkCalendarResolver(
 		CancellationToken cancellationToken)
 	{
 		var targetDate = date.Date;
+		if (batchYears != null)
+		{
+			return batchYears.FirstOrDefault(year => year.StartDate <= targetDate && year.EndDate >= targetDate)?.Id ??
+				throw new BusinessException(HRErrorCodes.AcademicYearRequiredForPolicyResolution);
+		}
+
 		var query = await academicYearRepository.GetQueryableAsync();
 		var academicYear = await AsyncExecuter.FirstOrDefaultAsync(
 			query.Where(year =>
 				year.StartDate <= targetDate &&
-				year.EndDate >= targetDate),
+				year.EndDate >= targetDate)
+				.OrderByDescending(year => year.StartDate).ThenBy(year => year.Id),
 			cancellationToken);
 		return academicYear?.Id ??
 			throw new BusinessException(HRErrorCodes.AcademicYearRequiredForPolicyResolution);

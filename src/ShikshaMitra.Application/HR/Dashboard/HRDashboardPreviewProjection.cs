@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace ShikshaMitra.HR.Dashboard;
 
 internal static class HRDashboardPreviewProjection
@@ -18,17 +16,6 @@ internal static class HRDashboardPreviewProjection
 			MissingAttendance = missing,
 			AttendanceRate = summary.AttendanceToday.AttendanceRate,
 			Trend = summary.AttendanceTrend,
-			TopDefaulters = summary.Workforce.RecentEmployees
-				.Take(7)
-				.Select(e => new HRDashboardAttendanceDefaulterDto
-				{
-					EmployeeId = e.Id,
-					EmployeeName = e.Name,
-					EmployeeIdentifier = e.EmployeeIdentifier,
-					MissingAttendance = missing > 0 ? 1 : 0,
-					Absences = summary.AttendanceToday.Absent
-				})
-				.ToList(),
 			ShiftSummary =
 			[
 				new HRDashboardShiftSummaryDto

@@ -13,8 +13,16 @@ namespace ShikshaMitra.Controllers.HR.Dashboard;
 [RemoteService(Name = "Default")]
 [Route("api/hr/dashboard")]
 [Authorize]
-public class HRDashboardController(IHRDashboardAppService dashboardAppService) : AbpControllerBase
+public class HRDashboardController(
+	IHRDashboardAppService dashboardAppService,
+	IHRAttendanceDashboardAppService attendanceDashboard) : AbpControllerBase
 {
+	[HttpGet("attendance")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_Dashboard.View)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public virtual Task<HRAttendanceDashboardDto> GetAttendanceAsync([FromQuery] string? date) =>
+		attendanceDashboard.GetAsync(date);
+
 	[HttpGet("overview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Dashboard.View)]
 	public virtual Task<HRDashboardOverviewDto> GetOverviewAsync([FromQuery] HRDashboardOverviewInput input) =>

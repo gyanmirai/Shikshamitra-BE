@@ -288,6 +288,7 @@ public partial class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, Guid.NewGuid().ToString());
 		(await client.GetAsync($"{BaseUrl}/overview")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 		(await client.GetAsync($"{BaseUrl}/staff")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+		(await client.GetAsync($"{BaseUrl}/attendance")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	private async Task AssignStaffOrganizationAsync(Guid employeeId, Guid stageId)
@@ -328,9 +329,12 @@ public partial class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		}
 		var before = await StoredCountsAsync();
 		var overview = await Client.GetFromJsonAsync<HRDashboardOverviewDto>($"{BaseUrl}/overview", JsonOptions);
+		var attendance = await Client.GetFromJsonAsync<HRAttendanceDashboardDto>($"{BaseUrl}/attendance?date={overview!.Date}", JsonOptions);
 		var staff = await Client.GetFromJsonAsync<HRDashboardStaffPageDto>($"{BaseUrl}/staff?maxResultCount=100", JsonOptions);
 		overview!.AttendanceState.ShouldBe(HRDashboardSectionState.Available);
 		overview.Summary!.StaffCount.ShouldBe(staff!.TotalCount);
+		attendance!.Summary.StaffCount.ShouldBe(overview.Summary.StaffCount);
+		attendance.Summary.Present.ShouldBe(overview.Summary.Present);
 		var allStaff = staff.Items.ToList();
 		for (var skip = 100; skip < staff.TotalCount; skip += 100)
 		{

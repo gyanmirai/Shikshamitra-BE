@@ -500,6 +500,20 @@ Missing scope is denied, and an out-of-scope assignment cannot be opened by supp
 Scoped audit reads include only authorized review events, while HR-wide audit access retains tenant-wide events.
 Final scores, ratings, and outcomes require the existing confidential-outcome grant or its legacy alias in both list and detail responses.
 
+### Staff attendance dashboard
+
+`GET /api/hr/dashboard/attendance?date=YYYY-MM-DD` requires `HR.AttendanceAndLeave.Dashboard.View`.
+The date defaults to today in IST, and future or invalid dates are rejected.
+The read uses the caller's current tenant and persisted employee scope from Security.
+For scoped callers, each day uses authorized staff assignments in its academic year.
+Dates without one matching academic year are identified in `unavailableDates`.
+The response includes the scope label, generation time, daily classified counts, and the seven calendar dates ending on the selection.
+Primary status counts sum to the eligible staff count.
+The review count measures distinct staff with review flags and may overlap any primary status.
+`review` is included only with `HR.AttendanceAndLeave.AttendanceTracking.View` and returns at most five flagged staff with status and review reasons.
+The read has no preview writes, scheduled refresh, or shared response caching.
+Legacy Attendance preview read and refresh responses redact stored named exceptions during rollout.
+
 | Primary status | Operational definition |
 |---|---|
 | Present | Recorded present, including a working exception on a non-working day |

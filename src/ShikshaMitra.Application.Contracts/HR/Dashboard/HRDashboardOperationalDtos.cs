@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Dashboard;
 
@@ -21,6 +23,27 @@ public enum HRDashboardReviewFlagCode
 }
 
 public sealed record HRDashboardReviewFlagDto(HRDashboardReviewFlagCode Code, string Message);
+
+public interface IHRAttendanceDashboardAppService : IApplicationService
+{
+	Task<HRAttendanceDashboardDto> GetAsync(string? date);
+}
+
+public sealed record HRAttendanceDashboardDto(
+	string AsOfDate,
+	DateTimeOffset GeneratedAt,
+	string ScopeLabel,
+	HRDashboardDailyCountsDto Summary,
+	List<HRDashboardDailyCountsDto> Trend,
+	List<string> UnavailableDates,
+	[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	List<HRAttendanceDashboardReviewDto>? Review);
+
+public sealed record HRAttendanceDashboardReviewDto(
+	Guid EmployeeId,
+	string Name,
+	HRDashboardDailyStatus Status,
+	List<HRDashboardReviewFlagDto> Flags);
 
 public class HRDashboardOverviewInput
 {

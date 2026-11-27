@@ -36,33 +36,48 @@ public class SalaryTemplateAppService(
 	public async Task<SalaryTemplateListDto> GetListAsync()
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
-		var templates = await asyncExecuter.ToListAsync(
-			(await templateRepository.GetQueryableAsync()).OrderByDescending(x => x.IsDefault).ThenBy(x => x.Name));
-		var versions = await asyncExecuter.ToListAsync(await versionRepository.GetQueryableAsync());
-		return new SalaryTemplateListDto
-		{
-			Items = templates
-				.Select(template => Map(template, versions.Where(x => x.TemplateId == template.Id).ToList()))
-				.ToList()
-		};
+		return await ReadListAsync(activeOnly: false);
 	}
 
 	public async Task<SalaryTemplateListDto> GetActiveListAsync()
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
-		var templates = await asyncExecuter.ToListAsync(
-			(await templateRepository.GetQueryableAsync())
-				.Where(x => x.Status == SalaryTemplateStatus.Published && x.PublishedVersion.HasValue)
-				.OrderByDescending(x => x.IsDefault)
-				.ThenBy(x => x.Name));
-		var templateIds = templates.Select(x => x.Id).ToList();
-		var versions = await asyncExecuter.ToListAsync(
-			(await versionRepository.GetQueryableAsync()).Where(x => templateIds.Contains(x.TemplateId)));
+		return await ReadListAsync(activeOnly: true);
+	}
+
+	private async Task<SalaryTemplateListDto> ReadListAsync(bool activeOnly)
+	{
+		using var templateTracking = templateRepository.DisableTracking();
+		using var versionTracking = versionRepository.DisableTracking();
+		var templates = await templateRepository.GetQueryableAsync();
+		var versions = await versionRepository.GetQueryableAsync();
+		if (activeOnly)
+			templates = templates.Where(x => x.Status == SalaryTemplateStatus.Published && x.PublishedVersion.HasValue);
+
+		// Count history in SQL and select the editable version in the same statement.
+		var rows = await asyncExecuter.ToListAsync(
+			from template in templates
+			join published in versions.Where(x => x.Status == SalaryTemplateStatus.Published)
+				on new { TemplateId = template.Id, Number = template.PublishedVersion }
+				equals new { published.TemplateId, Number = (int?)published.VersionNumber } into publishedVersions
+			from published in publishedVersions.DefaultIfEmpty()
+			join latest in versions
+				on new { TemplateId = template.Id, Number = published == null ? (int?)template.LatestVersion : null }
+				equals new { latest.TemplateId, Number = (int?)latest.VersionNumber } into latestVersions
+			from latest in latestVersions.DefaultIfEmpty()
+			orderby template.IsDefault descending, template.Name
+			select new
+			{
+				Template = template,
+				Published = published,
+				Latest = latest,
+				VersionCount = versions.Count(x => x.TemplateId == template.Id)
+			});
 		return new SalaryTemplateListDto
 		{
-			Items = templates
-				.Select(template => Map(template, versions.Where(x => x.TemplateId == template.Id).ToList()))
-				.Where(x => x.Status == "ACTIVE")
+			Items = rows
+				.Select(row => Map(row.Template, row.Published, row.Published ?? row.Latest, row.VersionCount))
+				.Where(x => !activeOnly || x.Status == "ACTIVE")
 				.ToList()
 		};
 	}
@@ -478,6 +493,15 @@ public class SalaryTemplateAppService(
 	{
 		var active = FindActive(template, versions);
 		var editable = active ?? versions.Single(x => x.VersionNumber == template.LatestVersion);
+		return Map(template, active, editable, versions.Count);
+	}
+
+	private static SalaryTemplateDto Map(
+		SalaryStructureTemplate template,
+		SalaryStructureTemplateVersion? active,
+		SalaryStructureTemplateVersion editable,
+		int versionCount)
+	{
 		var requiresSetup = active == null || RequiresSetup(active);
 		return new SalaryTemplateDto
 		{
@@ -487,7 +511,7 @@ public class SalaryTemplateAppService(
 			Status = template.Status == SalaryTemplateStatus.Archived ? "ARCHIVED" : requiresSetup ? "NEEDS_SETUP" : "ACTIVE",
 			IsDefault = template.IsDefault,
 			ActiveVersion = active?.VersionNumber,
-			VersionCount = versions.Count,
+			VersionCount = versionCount,
 			UpdatedAt = template.LastModificationTime ?? template.CreationTime,
 			ConcurrencyStamp = template.ConcurrencyStamp,
 			EditableVersion = MapVersion(editable, template.PublishedVersion)

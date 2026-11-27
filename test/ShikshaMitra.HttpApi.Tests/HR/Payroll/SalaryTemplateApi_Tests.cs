@@ -121,6 +121,27 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 		template.Status.ShouldBe("ACTIVE");
 		template.ActiveVersion.ShouldBe(1);
 		template.EditableVersion.Status.ShouldBe("ACTIVE");
+
+		var update = Save(input.Name, basic.ComponentId);
+		update.ExpectedActiveVersionId = template.EditableVersion.Id;
+		update.ConcurrencyStamp = template.ConcurrencyStamp;
+		var previewInput = Preview(update);
+		previewInput.TemplateId = template.Id;
+		previewInput.ExpectedActiveVersionId = update.ExpectedActiveVersionId;
+		previewInput.ConcurrencyStamp = update.ConcurrencyStamp;
+		update.PreviewToken = (await PostAndReadAsync<SalaryTemplatePreviewDto>($"{BaseUrl}/preview", previewInput)).PreviewToken;
+		using var updateResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{template.Id}", update, JsonOptions);
+		updateResponse.IsSuccessStatusCode.ShouldBeTrue(await updateResponse.Content.ReadAsStringAsync());
+		var updated = (await updateResponse.Content.ReadFromJsonAsync<SalaryTemplateDto>(JsonOptions))!;
+
+		foreach (var endpoint in new[] { BaseUrl, $"{BaseUrl}/active" })
+		{
+			var item = (await GetAndReadAsync<SalaryTemplateListDto>(endpoint)).Items.Single(x => x.Id == template.Id);
+			item.ActiveVersion.ShouldBe(2);
+			item.VersionCount.ShouldBe(2);
+			item.EditableVersion.Id.ShouldBe(updated.EditableVersion.Id);
+			item.EditableVersion.Rules.Single().ComponentId.ShouldBe(basic.ComponentId);
+		}
 	}
 
 	[Fact]
@@ -167,6 +188,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 		archive.IsSuccessStatusCode.ShouldBeTrue(await archive.Content.ReadAsStringAsync());
 		(await Client.GetFromJsonAsync<SalaryTemplateDto>($"{BaseUrl}/{first.Id}", JsonOptions))!.Status.ShouldBe("ARCHIVED");
 		(await Client.GetFromJsonAsync<SalaryTemplateDto>($"{BaseUrl}/{second.Id}", JsonOptions))!.IsDefault.ShouldBeTrue();
+		(await GetAndReadAsync<SalaryTemplateListDto>(BaseUrl)).Items.Single(x => x.Id == first.Id).Status.ShouldBe("ARCHIVED");
+		(await GetAndReadAsync<SalaryTemplateListDto>($"{BaseUrl}/active")).Items.ShouldNotContain(x => x.Id == first.Id);
 	}
 
 	[Fact]

@@ -474,11 +474,16 @@ public partial class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 			{
 				await users.InsertAsync(new IdentityUser(userId, $"dashboard-{userId:N}", $"dashboard-{userId:N}@test.local", currentTenant.Id), autoSave: true);
 			}
+			var hierarchy = await scope.ServiceProvider.GetRequiredService<HrMediumStageScopeReader>().GetByStageIdsAsync([stageId]);
+			var stage = hierarchy[stageId];
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),
 					Guid.Parse(TestAuthHandler.TestTenantId),
 					userId: userId,
+					academicYearId: stage.AcademicYearId,
+					educationBoardId: stage.BoardId,
+					educationMediumId: stage.MediumId,
 					educationMediumStageId: stageId,
 					description: "API regression test HR dashboard stage scope"),
 				autoSave: false);

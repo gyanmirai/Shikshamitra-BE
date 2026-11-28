@@ -219,6 +219,19 @@ Policy regression coverage must prove semantic manual-holiday audit comparison, 
 Report regression coverage must prove PDF row-cap metadata, inverted-date request suppression, newly queued export visibility, failed-export deletion wiring, UTC PostgreSQL timestamp boundaries, broad-owner to narrow-recipient rejection, compatible recipient access, cross-tenant rejection, owner and recipient scope revocation, schedule-owner permission revocation, invalid-first schedule isolation, legacy queued-snapshot capture, fail-closed legacy generation without an effective owner scope, retry generation fencing, and stale queued-snapshot rejection by the export worker.
 Scheduled-delivery coverage must prove that delivery waits for unit-of-work completion, still runs without an ambient unit of work, and cannot fail an already committed schedule.
 
+## Attendance dashboard stage scope
+
+The DDVS staging check on 27 November 2026 found that a non-admin with one explicitly assigned stage received a count that included staff in other stages.
+The deployed dashboard suppressed named reviews without Attendance Tracking View, even when the assigned synthetic staff member had a review flag.
+The fixture grants and stage assignment were revoked, both synthetic staff records were marked inactive, and both fixture logins were disabled.
+
+`Attendance_Dashboard_Should_Apply_Scope_To_Named_Review_And_Revalidate_It_On_The_Next_Read` uses a persisted stage assignment with its year, board, and medium IDs and places a second active employee in a sibling stage under the same medium.
+It checks the daily and trend counts, named-review gating, and denial after scope removal.
+`UserScopeNullEqualsAllTests` checks that a stage assignment excludes sibling stages, a medium assignment excludes sibling media, and explicit parent grants still include their descendants.
+The new scope assertion failed against the unchanged backend and passed with the correction, along with all 28 dashboard HTTP tests.
+The broader HTTP selection had three existing Attendance Tracking failures, reproduced with the unchanged backend.
+Rerun the scoped role check in DDVS after the backend correction deploys.
+
 ## Frontend integration checks
 
 Use frontend checks when backend changes affect routes, payloads, permissions, or user flows:

@@ -285,6 +285,26 @@ public class UserScopeNullEqualsAllTests
         scope.HasTenantWideScope().ShouldBeFalse();
         scope.CanAccessMediumStage(Guid.NewGuid()).ShouldBeFalse();
         scope.CanAccessMediumStage(Guid.NewGuid(), mediumId: mediumId).ShouldBeTrue();
+        scope.CanAccessMediumStage(Guid.NewGuid(), Guid.NewGuid(), boardId, academicYearId).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithStageAssignment_ShouldNotGrantSiblingsThroughAncestors()
+    {
+        var userId = Guid.NewGuid();
+        var yearId = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        var mediumId = Guid.NewGuid();
+        var stageId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            Guid.NewGuid(), Guid.NewGuid(), userId: userId, academicYearId: yearId,
+            educationBoardId: boardId, educationMediumId: mediumId, educationMediumStageId: stageId);
+
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, [assignment]);
+
+        scope.CanAccessMediumStage(stageId, mediumId, boardId, yearId).ShouldBeTrue();
+        scope.CanAccessMediumStage(Guid.NewGuid(), mediumId, boardId, yearId).ShouldBeFalse();
+        scope.CanAccessMediumStage(Guid.NewGuid(), Guid.NewGuid(), boardId, yearId).ShouldBeFalse();
     }
 
     [Fact]

@@ -169,16 +169,13 @@ public class UserScopeContext
             return true;
         }
 
-        if (mediumId.HasValue &&
-            (MediumIds.Contains(mediumId.Value) ||
-             WildcardMediumStageMediumIds.Contains(mediumId.Value)))
+        // Parent IDs also describe the path to a narrower assignment.
+        if (mediumId.HasValue && WildcardMediumStageMediumIds.Contains(mediumId.Value))
         {
             return true;
         }
 
-        if (boardId.HasValue &&
-            (BoardIds.Contains(boardId.Value) ||
-             WildcardMediumBoardIds.Contains(boardId.Value)))
+        if (boardId.HasValue && WildcardMediumBoardIds.Contains(boardId.Value))
         {
             return true;
         }

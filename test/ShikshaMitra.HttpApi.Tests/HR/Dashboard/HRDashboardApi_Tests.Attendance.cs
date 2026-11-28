@@ -11,6 +11,8 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp;
@@ -66,25 +68,31 @@ public partial class HRDashboardApi_Tests
 		var units = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 		var scopeAssignments = services.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		DateOnly date;
+		Guid assignedStageId;
 		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
 		using (var unit = units.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
 			var year = await services.ServiceProvider.GetRequiredService<IRepository<AcademicYear, Guid>>()
 				.GetAsync(EmployeeTestHelper.DefaultAcademicYearId);
 			date = DateOnly.FromDateTime(year.StartDate).AddDays(7);
+			var stage = await services.ServiceProvider.GetRequiredService<EducationMediumStageManager>()
+				.CreateAsync(EmployeeTestHelper.DefaultMediumId, $"Attendance scope {Guid.NewGuid():N}");
+			await services.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>().InsertAsync(stage);
+			assignedStageId = stage.Id;
 			await unit.CompleteAsync();
 		}
 
 		var allowed = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AAReview{Guid.NewGuid():N}",
 			dateOfJoining: date.ToDateTime(TimeOnly.MinValue));
-		await AssignStaffOrganizationAsync(allowed.Id, EmployeeTestHelper.DefaultMediumStageId);
+		await AssignStaffOrganizationAsync(allowed.Id, assignedStageId);
 		var outside = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"OutsideReview{Guid.NewGuid():N}",
 			dateOfJoining: date.ToDateTime(TimeOnly.MinValue));
+		await AssignStaffOrganizationAsync(outside.Id, EmployeeTestHelper.DefaultMediumStageId);
 		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
 		using (var unit = units.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
 			await services.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>()
-				.DeleteAsync(assignment => assignment.EmployeeId == outside.Id);
+				.DeleteAsync(assignment => assignment.EmployeeId == allowed.Id && assignment.EducationMediumStageId != assignedStageId);
 			var records = services.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
 			foreach (var employeeId in new[] { allowed.Id, outside.Id })
 			{
@@ -99,7 +107,7 @@ public partial class HRDashboardApi_Tests
 		}
 
 		var userId = Guid.NewGuid();
-		await EnsureUserHasStageScopeAsync(userId, EmployeeTestHelper.DefaultMediumStageId);
+		await EnsureUserHasStageScopeAsync(userId, assignedStageId);
 		using var client = CreateClientAs(userId);
 		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{AttendanceView},{TrackingView}");
 		var url = $"{BaseUrl}/attendance?date={date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
@@ -108,6 +116,8 @@ public partial class HRDashboardApi_Tests
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
 		var result = JsonSerializer.Deserialize<HRAttendanceDashboardDto>(raw, JsonOptions)!;
 		result.ScopeLabel.ShouldBe("Staff in your assigned scope");
+		result.Summary.StaffCount.ShouldBe(1);
+		result.Trend[^1].StaffCount.ShouldBe(1);
 		result.Review!.Count.ShouldBeLessThanOrEqualTo(5);
 		result.Review.ShouldContain(row => row.EmployeeId == allowed.Id &&
 			row.Flags.Any(flag => flag.Code == HRDashboardReviewFlagCode.IncompletePunch), raw);
@@ -118,6 +128,7 @@ public partial class HRDashboardApi_Tests
 		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, AttendanceView);
 		var reduced = await client.GetFromJsonAsync<HRAttendanceDashboardDto>(url, JsonOptions);
 		reduced!.Review.ShouldBeNull();
+		reduced.Summary.StaffCount.ShouldBe(1);
 		reduced.Summary.NeedsReview.ShouldBe(result.Summary.NeedsReview);
 		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
 		using (var unit = units.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))

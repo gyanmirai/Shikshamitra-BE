@@ -230,7 +230,12 @@ It checks the daily and trend counts, named-review gating, and denial after scop
 `UserScopeNullEqualsAllTests` checks that a stage assignment excludes sibling stages, a medium assignment excludes sibling media, and explicit parent grants still include their descendants.
 The new scope assertion failed against the unchanged backend and passed with the correction, along with all 28 dashboard HTTP tests.
 The broader HTTP selection had three existing Attendance Tracking failures, reproduced with the unchanged backend.
-Rerun the scoped role check in DDVS after the backend correction deploys.
+
+After the backend correction deployed to DDVS, the scoped non-admin dashboard showed one eligible synthetic staff member in both browser checks for the 22 November 2026 attendance date. [Backend PR #891](https://github.com/gyanmirai/Shikshamitra-BE/pull/891)
+Without Attendance Tracking View, Admin could see the assigned staff member's named review, while the scoped dashboard showed one review flag with names hidden.
+With Attendance Tracking View, Admin could see named reviews for both synthetic staff, and the scoped dashboard showed exactly one named review for the assigned staff member.
+After each check, the temporary grants and Security stage assignment were revoked and the scoped dashboard denied access.
+The test login was disabled, and a fresh sign-in was rejected.
 
 ## Frontend integration checks
 
